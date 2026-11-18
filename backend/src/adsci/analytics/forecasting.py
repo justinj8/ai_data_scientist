@@ -46,6 +46,23 @@ def _fmt(ts: pd.Timestamp, freq: str) -> str:
     return ts.strftime("%Y-%m-%d %H:%M") if freq in ("h", "H") else ts.strftime("%Y-%m-%d")
 
 
+_PERIOD_FREQ = {"MS": "M", "ME": "M", "M": "M", "QS": "Q", "QE": "Q", "Q": "Q", "W": "W", "D": "D", "B": "B",
+                "h": "h", "H": "h", "YS": "Y", "YE": "Y", "Y": "Y", "A": "Y"}
+
+
+def _last_bin_incomplete(raw_index: pd.DatetimeIndex, series: pd.Series, freq: str) -> bool:
+    """True when the data stops before the last period ends (e.g. a month with only five days of data)."""
+    base = freq.split("-")[0]
+    pfreq = _PERIOD_FREQ.get(base)
+    if pfreq is None or len(raw_index.unique()) < 3:
+        return False
+    step = pd.Series(raw_index.unique().sort_values()).diff().median()
+    if pfreq == "W" and "-" in freq:
+        pfreq = freq  # keep the week anchor
+    period_end = pd.Period(series.index[-1], freq=pfreq).end_time
+    return raw_index.max() + step <= period_end
+
+
 def _prepare(df: pd.DataFrame, date_col: str, value_col: str, freq: str | None, agg: str) -> tuple[pd.Series, str]:
     s = df[[date_col, value_col]].dropna()
     idx = pd.to_datetime(s[date_col])
@@ -57,10 +74,17 @@ def _prepare(df: pd.DataFrame, date_col: str, value_col: str, freq: str | None, 
             step = pd.Series(uniq).diff().median()
             freq = "D" if step <= pd.Timedelta(days=1) else "W" if step <= pd.Timedelta(days=7) else "MS"
         freq = {"W-SUN": "W"}.get(freq, freq)
+    raw_index = series.index
     series = series.resample(freq).agg(agg)
     if agg == "sum":
         series = series.fillna(0.0)
-    return series.interpolate(limit_direction="both"), freq
+    series = series.interpolate(limit_direction="both")
+    series.attrs["dropped_partial"] = False
+    if len(series) > 3 and _last_bin_incomplete(raw_index, series, freq):
+        label = series.index[-1]
+        series = series.iloc[:-1]
+        series.attrs["dropped_partial"] = str(label.date())
+    return series, freq
 
 
 def _seasonal_period(y: pd.Series, freq: str) -> int | None:
@@ -118,6 +142,11 @@ def forecast_series(
         )
     period = _seasonal_period(y, freq)
     warns: list[str] = []
+    if y.attrs.get("dropped_partial"):
+        warns.append(
+            f"The last period ({y.attrs['dropped_partial']}) is incomplete in the data, so it was left out of "
+            "training and the forecast starts with it."
+        )
     if len(y) < 2 * horizon * FOLDS:
         warns.append("Short history: backtest folds overlap little with the forecast horizon.")
 
@@ -137,7 +166,7 @@ def forecast_series(
     candidates = {n: float(np.mean([s[0] for s in v])) for n, v in scores.items()}
     best = min(candidates, key=candidates.get)
     pred, lo, hi = _fit_predict(best, y, horizon, period)
-    future = pd.date_range(y.index[-1], periods=horizon + 1, freq=freq)[1:]
+    future = pd.date_range(y.index[-1], periods=horizon + 1, freq=freq)[1:]  # starts at the dropped period, if any
     nm = float(np.mean([s[0] for s in naive_scores]))
     if candidates[best] >= nm:
         warns.append("The model does not beat a seasonal-naive forecast in backtests; treat the forecast with caution.")
