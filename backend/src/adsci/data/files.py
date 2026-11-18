@@ -124,7 +124,8 @@ class FileDataSource:
         self.max_limit = max_limit
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._con = duckdb.connect(str(self.db_path))
+        # No file or network access from SQL: uploads are loaded through pandas, so queries never need it.
+        self._con = duckdb.connect(str(self.db_path), config={"enable_external_access": False})
         self._lock = threading.Lock()
         self._con.execute(
             f"CREATE TABLE IF NOT EXISTS {_META_COLUMNS} (table_name TEXT, column_name TEXT, original_name TEXT)"
