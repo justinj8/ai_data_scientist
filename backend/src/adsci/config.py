@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     kernel_work_root: Path | None = None
     static_dir: Path | None = None  # built frontend (frontend/dist); served at / when set
     host: str = "127.0.0.1"
+    # Host headers the API answers to; blocks DNS-rebinding attacks from web pages.
+    allowed_hosts: list[str] = ["127.0.0.1", "localhost", "::1"]
     port: int = 8000  # set in Docker; otherwise the OS keychain holds the key
 
 

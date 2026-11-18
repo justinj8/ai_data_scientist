@@ -12,6 +12,7 @@ from adsci.config import Settings
 
 @pytest.fixture(autouse=True)
 def _no_ambient_provider_keys(monkeypatch):
+    monkeypatch.setenv("ADSCI_ALLOWED_HOSTS", '["127.0.0.1", "localhost", "testserver"]')
     for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY"):
         monkeypatch.delenv(k, raising=False)
 
