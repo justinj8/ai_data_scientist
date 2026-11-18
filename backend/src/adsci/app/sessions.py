@@ -63,13 +63,19 @@ class Session:
     def touch(self) -> None:
         self.last_active = _now()
 
+    def stop_kernel(self) -> bool:
+        """Free the kernel's memory; it restarts on the next Python step (variables are lost)."""
+        if self.kernel is None:
+            return False
+        try:
+            self.kernel.close_sync()
+        except Exception:  # noqa: BLE001 - closing is best-effort
+            pass
+        self.kernel = None
+        return True
+
     def close(self) -> None:
-        if self.kernel is not None:
-            try:
-                self.kernel.close_sync()
-            except Exception:  # noqa: BLE001 - closing is best-effort
-                pass
-            self.kernel = None
+        self.stop_kernel()
         for src in self.sources.values():
             try:
                 src.close()
@@ -113,9 +119,8 @@ class SessionManager:
             self.close(sid)
 
     def reap_idle(self, now: datetime) -> int:
+        """Stop the kernels of idle sessions. Sessions themselves (data, history, board) are kept."""
         cutoff = now - timedelta(minutes=self.settings.session_idle_minutes)
         with self._lock:
-            stale = [sid for sid, s in self._sessions.items() if s.last_active < cutoff]
-        for sid in stale:
-            self.close(sid)
-        return len(stale)
+            idle = [s for s in self._sessions.values() if s.last_active < cutoff and not s.lock.locked()]
+        return sum(s.stop_kernel() for s in idle)

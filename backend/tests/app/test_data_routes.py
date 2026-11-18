@@ -79,9 +79,18 @@ def test_unknown_session_404(client):
     assert client.get("/api/sessions/nope/schema").status_code == 404
 
 
-def test_reap_idle_closes_old_sessions(client):
+def test_reap_idle_stops_kernels_but_keeps_session_data(client):
     manager = client.app.state.sessions
     sid = _new(client)
-    manager.get(sid).last_active = datetime.now(UTC) - timedelta(hours=5)
+    session = manager.get(sid)
+    stopped = []
+
+    class FakeKernel:
+        def close_sync(self):
+            stopped.append(True)
+
+    session.kernel = FakeKernel()
+    session.last_active = datetime.now(UTC) - timedelta(hours=5)
     assert manager.reap_idle(datetime.now(UTC)) == 1
-    assert client.get(f"/api/sessions/{sid}/schema").status_code == 404
+    assert stopped == [True] and session.kernel is None
+    assert client.get(f"/api/sessions/{sid}/schema").status_code == 200  # data, history and board survive
