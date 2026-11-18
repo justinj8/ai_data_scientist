@@ -8,5 +8,6 @@ def registry_tools() -> list:
     from adsci.tools.python_tool import RunPythonTool
     from adsci.tools.sql_tool import RunSQLTool
     from adsci.tools.stats_tool import StatsTestTool
+    from adsci.tools.timeseries_tools import AnomalyTool, ForecastTool, SegmentTool
 
-    return [ProfileTool(), RunSQLTool(), RunPythonTool(), CreateChartTool(), StatsTestTool(), TrainModelTool()]
+    return [ProfileTool(), RunSQLTool(), RunPythonTool(), CreateChartTool(), StatsTestTool(), TrainModelTool(), ForecastTool(), AnomalyTool(), SegmentTool()]
