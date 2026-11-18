@@ -1,0 +1,64 @@
+[project]
+name = "adsci"
+version = "0.1.0"
+description = "AI Data Scientist: an agent that analyzes CSV/XLSX files and live databases with SQL, Python, statistics and ML."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.1",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "python-multipart>=0.0.9",
+    "duckdb>=1.1",
+    "pandas>=2.2",
+    "pyarrow>=17",
+    "openpyxl>=3.1",
+    "sqlalchemy>=2.0.30",
+    "sqlglot>=25",
+    "psycopg[binary]>=3.2",
+    "pymysql>=1.1",
+    "pymssql>=2.3",
+    "snowflake-sqlalchemy>=1.6",
+    "sqlalchemy-bigquery>=1.11",
+    "jupyter-client>=8.6",
+    "ipykernel>=6.29",
+    "nbformat>=5.10",
+    "numpy>=1.26",
+    "scipy>=1.13",
+    "statsmodels>=0.14",
+    "scikit-learn>=1.5",
+    "plotly>=5.22",
+    "anthropic>=0.40",
+    "openai>=1.50",
+    "httpx>=0.27",
+    "cryptography>=43",
+    "keyring>=25",
+    "pyjwt[crypto]>=2.9",
+    "pyyaml>=6",
+]
+
+[project.scripts]
+adsci = "adsci.app.main:run"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "respx>=0.21", "ruff>=0.6"]
+
+[build-system]
+requires = ["uv_build>=0.10.6,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008"]
