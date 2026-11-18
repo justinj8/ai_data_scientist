@@ -24,6 +24,7 @@ class MockOAuth:
         self.issued = 0
         self.access_ttl = 3600
         self.device_status = "authorization_pending"
+        self.fail_refresh = False
 
     def id_token(self, aud):
         now = int(time.time())
@@ -53,6 +54,8 @@ class MockOAuth:
                                               "expires_in": 600, "interval": 1})
         if path.endswith("/token"):
             self.token_requests.append(form)
+            if form.get("grant_type") == "refresh_token" and self.fail_refresh:
+                return httpx2.Response(400, json={"error": "invalid_grant"})
             if form.get("grant_type") == "urn:ietf:params:oauth:grant-type:device_code":
                 if self.device_status != "ok":
                     return httpx2.Response(400, json={"error": self.device_status})

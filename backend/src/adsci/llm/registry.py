@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from adsci.auth.store import ApiKeyCredential, CredentialStore, OAuthCredential
 from adsci.llm.anthropic_adapter import AnthropicAdapter
-from adsci.llm.base import AuthError, LLMAdapter, ProviderError
+from adsci.llm.base import AuthError, LLMAdapter
 from adsci.llm.openai_adapter import OpenAICompatAdapter
 from adsci.llm.types import ModelInfo
 
@@ -130,7 +130,7 @@ class ModelRegistry:
             return hit[1]
         try:
             models = await self.adapter_factory(provider).list_models()
-        except ProviderError:
+        except Exception:  # noqa: BLE001 - one provider's failure must never hide the others
             return None
         self._cache[provider] = (time.monotonic(), models)
         return models

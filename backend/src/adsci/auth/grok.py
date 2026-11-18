@@ -16,6 +16,7 @@ import httpx2
 from pydantic import BaseModel, SecretStr
 
 from adsci.auth.store import CredentialStore, OAuthCredential
+from adsci.llm.base import AuthError
 
 DISCOVERY_URL = "https://auth.x.ai/.well-known/openid-configuration"
 DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
@@ -23,8 +24,9 @@ SCOPES = "openid profile email offline_access api:access"
 REFRESH_MARGIN = timedelta(minutes=5)
 
 
-class GrokSignInUnavailable(Exception):
-    pass
+class GrokSignInUnavailable(AuthError):
+    def __init__(self, message: str, provider: str = "xai") -> None:
+        super().__init__(message, provider)
 
 
 class DeviceCode(BaseModel):
@@ -109,6 +111,7 @@ class GrokAuth:
                 "refresh_token": cred.refresh_token.get_secret_value() if cred.refresh_token else "",
             })
             if r.status_code != 200:
+                self.store.delete("xai", "supergrok_plan")
                 raise GrokSignInUnavailable("Your SuperGrok sign-in expired. Please sign in again.")
             t = r.json()
             cred.access_token = SecretStr(t["access_token"])

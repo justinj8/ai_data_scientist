@@ -202,7 +202,11 @@ class OpenAICompatAdapter:
     async def _plan_models(self) -> list[ModelInfo]:
         """Plan tokens get a different model-list shape: {"models": [{"slug", "display_name", "visibility"}]}."""
         http = self.http_client or httpx2.AsyncClient(timeout=30)
-        r = await http.get(f"{self.base_url}/models", headers={"Authorization": f"Bearer {await self.token_provider()}"})
+        try:
+            r = await http.get(f"{self.base_url}/models",
+                               headers={"Authorization": f"Bearer {await self.token_provider()}"})
+        except httpx2.HTTPError as e:
+            raise ProviderUnavailable(f"OpenAI is unavailable: {e}", self.provider) from None
         if r.status_code >= 400:
             raise self._map_error(openai.APIStatusError(r.text, response=r, body=None))
         out = []

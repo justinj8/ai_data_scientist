@@ -73,3 +73,34 @@ async def test_resolve_key_and_raw_id(store):
     assert raw.id == "grok-4.6" and raw.provider == "xai"
     with pytest.raises(AuthError, match="Anthropic"):
         await reg.resolve("opus")
+
+
+async def test_broken_subscription_does_not_break_other_models(store):
+    from adsci.auth.chatgpt import SignInError
+
+    store.set(ApiKeyCredential(provider="anthropic", api_key="k"))
+
+    class Broken:
+        provider = "openai"
+
+        async def list_models(self):
+            raise SignInError("Your ChatGPT sign-in expired. Please sign in again.")
+
+    good = FakeListAdapter("anthropic", [mi("claude-opus-5-5", "anthropic", "opus", (2026, 9, 1))])
+    from adsci.auth.store import OAuthCredential
+
+    store.set(OAuthCredential(provider="openai", kind="chatgpt_plan", access_token="a", refresh_token="r",
+                              expires_at=datetime(2020, 1, 1, tzinfo=UTC)))
+    reg = ModelRegistry(store, lambda p: good if p == "anthropic" else Broken())
+    choices = {c.key: c for c in await reg.choices()}
+    assert choices["opus"].available and choices["gpt"].model.id == FALLBACK_MODELS["gpt"]
+    adapter, model = await reg.resolve("opus")
+    assert model.id == "claude-opus-5-5"
+
+
+def test_sign_in_errors_are_provider_auth_errors():
+    from adsci.auth.chatgpt import SignInError
+    from adsci.auth.grok import GrokSignInUnavailable
+
+    assert issubclass(SignInError, AuthError) and issubclass(GrokSignInUnavailable, AuthError)
+    assert SignInError("x").user_action == "update_credentials"

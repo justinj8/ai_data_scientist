@@ -24,6 +24,7 @@ from pydantic import SecretStr
 
 from adsci.auth.store import CredentialStore, OAuthCredential
 from adsci.config import Settings
+from adsci.llm.base import AuthError
 
 AUTHORIZE_URL = "https://auth.openai.com/api/accounts/authorize"
 TOKEN_URL = "https://auth.openai.com/api/accounts/oauth/token"
@@ -38,8 +39,11 @@ REFRESH_MARGIN = timedelta(minutes=5)
 PENDING_TTL_S = 600
 
 
-class SignInError(Exception):
-    """Sign-in failed; the message is safe to show the user."""
+class SignInError(AuthError):
+    """Sign-in failed or expired; the message is safe to show the user."""
+
+    def __init__(self, message: str, provider: str = "openai") -> None:
+        super().__init__(message, provider)
 
 
 class PlanUsageNotEnabled(SignInError):
@@ -195,6 +199,8 @@ class ChatGPTAuth:
                 "refresh_token": cred.refresh_token.get_secret_value(), "resource": RESOURCE,
             })
             if r.status_code != 200:
+                # The refresh token is dead: drop the subscription so a saved API key (if any) takes over.
+                self.store.delete("openai", "chatgpt_plan")
                 raise SignInError("Your ChatGPT sign-in expired. Please sign in again.")
             t = r.json()
             cred.access_token = SecretStr(t["access_token"])
