@@ -1,0 +1,30 @@
+{
+  "total_revenue_2025": 4658795.4,
+  "total_revenue_2024": 4293958.42,
+  "yoy_revenue_growth_2025": 0.084965,
+  "promo_aov_uplift": 0.075855,
+  "west_aov_ratio": 1.108315,
+  "top_category_2025": "Electronics",
+  "q4_share_2024": 0.312683,
+  "anomaly_spike_dates": [
+    "2024-03-14",
+    "2024-07-04",
+    "2024-09-21",
+    "2025-02-10",
+    "2025-06-18"
+  ],
+  "outage_dates": [
+    "2024-11-05",
+    "2025-08-12"
+  ],
+  "n_orders": 71630,
+  "churn_rate": 0.1986,
+  "churn_top_drivers": [
+    "last_login_days",
+    "support_tickets",
+    "tenure_months",
+    "nps",
+    "plan_basic"
+  ],
+  "region_churn_p_value": 0.46672333777788055
+}
