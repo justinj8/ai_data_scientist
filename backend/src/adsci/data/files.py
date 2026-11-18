@@ -167,8 +167,11 @@ class FileDataSource:
     kind: Literal["file"] = "file"
     dialect = "duckdb"
 
-    def __init__(self, name: str, db_path: Path, row_limit: int = 10_000, max_limit: int = 1_000_000) -> None:
+    def __init__(
+        self, name: str, db_path: Path, row_limit: int = 10_000, max_limit: int = 1_000_000, timeout_s: int = 30
+    ) -> None:
         self.name = name
+        self.timeout_s = timeout_s
         self.row_limit = row_limit
         self.max_limit = max_limit
         self.db_path = Path(db_path)
@@ -244,7 +247,16 @@ class FileDataSource:
         """Run a guarded, read-only query returning ``limit`` rows (default ``row_limit``, capped at ``max_limit``)."""
         sql = guard_sql(sql, self.dialect, min(limit or self.row_limit, self.max_limit))
         with self._lock:
-            return self._con.execute(sql).df()
+            watchdog = threading.Timer(self.timeout_s, self._con.interrupt)  # DuckDB has no statement timeout
+            watchdog.start()
+            try:
+                return self._con.execute(sql).df()
+            except duckdb.InterruptException:
+                raise TimeoutError(
+                    f"The query timed out after {self.timeout_s}s and was stopped. Aggregate or filter more."
+                ) from None
+            finally:
+                watchdog.cancel()
 
     def test_connection(self) -> None:
         with self._lock:

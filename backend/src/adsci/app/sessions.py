@@ -49,6 +49,7 @@ class Session:
                 self.dir / "files.duckdb",
                 row_limit=self.settings.sql_row_limit,
                 max_limit=self.settings.analysis_row_limit,
+                timeout_s=self.settings.sql_timeout_s,
             )
             self.sources[FILES_SOURCE] = src
         return src  # type: ignore[return-value]

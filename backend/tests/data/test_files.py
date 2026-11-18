@@ -140,3 +140,16 @@ def test_xlsx_title_above_numeric_year_headers(tmp_path):
     df, warns = load_xlsx(tmp_path / "rev.xlsx")["Rev"]
     assert list(df.columns) == ["region", "2022", "2023", "2024"] and len(df) == 2
     assert any("title row" in w for w in warns)
+
+
+def test_runaway_duckdb_query_times_out(tmp_path):
+    import time
+
+    import pytest
+
+    src = FileDataSource("files", tmp_path / "s.duckdb", timeout_s=1)
+    t0 = time.monotonic()
+    with pytest.raises(TimeoutError, match="timed out"):
+        src.query("select count(*) from range(100000000000) a, range(100000000000) b")
+    assert time.monotonic() - t0 < 10
+    assert len(src.query("select 1 as x")) == 1  # the connection is still usable
