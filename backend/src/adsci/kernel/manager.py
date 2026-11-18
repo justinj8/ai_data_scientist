@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
+import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Annotated, Literal
 
+from jupyter_client.kernelspec import KernelSpecManager
 from jupyter_client.manager import AsyncKernelManager
 from pydantic import BaseModel, Field
 
@@ -16,6 +20,36 @@ from adsci.kernel.bootstrap import KERNEL_STARTUP, PLOTLY_MIME, TABLE_MIME
 from adsci.kernel.plotly_json import figure_to_plain
 
 MAX_STDOUT = 200_000
+# Only these variables reach analysis code. Everything else (secret-key paths, tokens, provider keys) stays out.
+ENV_ALLOWLIST = ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "HOME", "USER", "SYSTEMROOT")
+SANDBOX_KERNEL = "adsci-sandbox"
+
+
+def kernel_env(extra: dict[str, str]) -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if k in ENV_ALLOWLIST}
+    if os.environ.get("ADSCI_KERNEL_MEMORY_BYTES"):
+        env["ADSCI_KERNEL_MEMORY_BYTES"] = os.environ["ADSCI_KERNEL_MEMORY_BYTES"]
+    env.update(extra)
+    return env
+
+
+def sandbox_kernelspec(user: str) -> dict:
+    """A kernelspec that starts the kernel as another OS user, so it can't read the app's files (credentials)."""
+    return {
+        "argv": ["sudo", "-n", "-u", user, sys.executable, "-m", "ipykernel_launcher", "-f", "{connection_file}"],
+        "display_name": "AI Data Scientist (sandboxed)",
+        "language": "python",
+        "interrupt_mode": "signal",
+    }
+
+
+class _SharedConnectionFileKM(AsyncKernelManager):
+    """Writes the connection file group-readable so a kernel running as another user (same group) can read it."""
+
+    def write_connection_file(self, **kwargs):
+        result = super().write_connection_file(**kwargs)
+        os.chmod(self.connection_file, 0o640)
+        return result
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -78,31 +112,50 @@ class KernelSession:
         internal_url: str,
         token: str,
         preview_rows: int = 50,
+        run_as: str | None = None,
+        group: str | None = None,
     ) -> None:
         self.session_id = session_id
         self.workdir = Path(workdir)
         self.internal_url = internal_url
         self.token = token
         self.preview_rows = preview_rows
+        self.run_as = run_as
+        self.group = group
         self._km: AsyncKernelManager | None = None
         self._kc = None
         self._lock = asyncio.Lock()
 
     async def start(self) -> None:
         self.workdir.mkdir(parents=True, exist_ok=True)
-        self._km = AsyncKernelManager(kernel_name="python3")
-        env = dict(os.environ)
-        env.update(
-            ADSCI_INTERNAL_URL=self.internal_url,
-            ADSCI_SESSION_ID=self.session_id,
-            ADSCI_TOKEN=self.token,
-            ADSCI_PREVIEW_ROWS=str(self.preview_rows),
-        )
-        # Provider API keys never reach user code.
-        for key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY"):
-            env.pop(key, None)
+        env = kernel_env({
+            "ADSCI_INTERNAL_URL": self.internal_url,
+            "ADSCI_SESSION_ID": self.session_id,
+            "ADSCI_TOKEN": self.token,
+            "ADSCI_PREVIEW_ROWS": str(self.preview_rows),
+        })
+        if self.run_as:
+            self._prepare_shared_workdir()
+            spec_root = Path(tempfile.mkdtemp(prefix="adsci-kernelspec-"))
+            (spec_root / SANDBOX_KERNEL).mkdir()
+            (spec_root / SANDBOX_KERNEL / "kernel.json").write_text(json.dumps(sandbox_kernelspec(self.run_as)))
+            self._km = _SharedConnectionFileKM(
+                kernel_name=SANDBOX_KERNEL,
+                kernel_spec_manager=KernelSpecManager(kernel_dirs=[str(spec_root)]),
+                connection_file=str(self.workdir / f"kernel-{self.session_id}.json"),
+            )
+        else:
+            self._km = AsyncKernelManager(kernel_name="python3")
         await self._km.start_kernel(cwd=str(self.workdir), env=env)
         await self._connect()
+
+    def _prepare_shared_workdir(self) -> None:
+        """Let the sandbox user (a member of ``group``) use the work directory, and nothing else of ours."""
+        if self.group:
+            import grp
+
+            os.chown(self.workdir, -1, grp.getgrnam(self.group).gr_gid)
+        os.chmod(self.workdir, 0o2770)
 
     async def _connect(self) -> None:
         assert self._km is not None
@@ -204,7 +257,11 @@ class KernelSession:
             self._kc.stop_channels()
         proc = getattr(getattr(self._km, "provisioner", None), "process", None)
         if proc is not None and proc.poll() is None:
-            proc.kill()
+            proc.terminate()  # sudo relays SIGTERM to a sandboxed kernel; SIGKILL would orphan it
+            try:
+                proc.wait(timeout=3)
+            except Exception:  # noqa: BLE001
+                proc.kill()
         if self._km is not None:
             self._km.cleanup_resources()
 

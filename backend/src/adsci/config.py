@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     internal_base_url: str = "http://127.0.0.1:8000"
     xai_oauth_client_id: str | None = None  # only an ID xAI issued to you; enables SuperGrok sign-in
     secret_key_file: Path | None = None
+    # Run analysis kernels as another OS user (Docker sets these) so they can't read credentials.
+    kernel_user: str | None = None
+    kernel_group: str | None = None
+    kernel_work_root: Path | None = None
     static_dir: Path | None = None  # built frontend (frontend/dist); served at / when set
     host: str = "127.0.0.1"
     port: int = 8000  # set in Docker; otherwise the OS keychain holds the key

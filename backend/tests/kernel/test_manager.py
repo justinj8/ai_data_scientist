@@ -86,3 +86,37 @@ async def test_close_sync_kills_kernel(tmp_path):
 
     await asyncio.sleep(0.5)
     assert not await k._km.is_alive()
+
+
+def test_kernel_env_is_an_allowlist(monkeypatch):
+    from adsci.kernel.manager import kernel_env
+
+    monkeypatch.setenv("ADSCI_SECRET_KEY_FILE", "/app/data/secret.key")
+    monkeypatch.setenv("ADSCI_DATA_DIR", "/app/data")
+    monkeypatch.setenv("SOME_SERVICE_TOKEN", "t0k")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+    env = kernel_env({"ADSCI_TOKEN": "session-token", "ADSCI_SESSION_ID": "s"})
+    assert env["ADSCI_TOKEN"] == "session-token" and "PATH" in env
+    for leaked in ("ADSCI_SECRET_KEY_FILE", "ADSCI_DATA_DIR", "SOME_SERVICE_TOKEN", "ANTHROPIC_API_KEY"):
+        assert leaked not in env
+
+
+def test_sandbox_kernelspec_runs_as_other_user():
+    import sys
+
+    from adsci.kernel.manager import sandbox_kernelspec
+
+    spec = sandbox_kernelspec("kernel")
+    assert spec["argv"][:4] == ["sudo", "-n", "-u", "kernel"]
+    assert spec["argv"][4:] == [sys.executable, "-m", "ipykernel_launcher", "-f", "{connection_file}"]
+
+
+async def test_kernel_process_does_not_inherit_secret_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("ADSCI_SECRET_KEY_FILE", str(tmp_path / "secret.key"))
+    k = KernelSession("e", tmp_path, internal_url="http://127.0.0.1:9", token="t")
+    await k.start()
+    try:
+        r = await k.execute("import os; print(os.environ.get('ADSCI_SECRET_KEY_FILE'))", 20)
+        assert r.stdout.strip() == "None"
+    finally:
+        await k.shutdown()
