@@ -93,3 +93,17 @@ async def test_logout_revokes_and_clears(auth, server):
     await auth.finish(code="c", state=p["state"], client_id="oaiapp_1")
     await auth.logout()
     assert server.revoked == ["rt-1"] and auth.store.get("openai") is None
+
+
+async def test_failed_refresh_drops_subscription_so_api_key_is_used(auth, server):
+    from adsci.auth.store import ApiKeyCredential
+
+    p = _params(auth.start())
+    server.nonce = p["nonce"]
+    server.access_ttl = 60
+    await auth.finish(code="c", state=p["state"], client_id="oaiapp_1")
+    auth.store.set(ApiKeyCredential(provider="openai", api_key="sk-fallback-1234"))
+    server.fail_refresh = True
+    with pytest.raises(SignInError, match="expired"):
+        await auth.token()
+    assert auth.store.get("openai").kind == "api_key"

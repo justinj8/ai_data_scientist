@@ -34,6 +34,10 @@ async def ask(request: Request, sid: str, body: AskBody) -> EventSourceResponse:
                 err = ErrorEvent(message=e.message, user_action=e.user_action)
                 yield {"event": err.type, "data": err.model_dump_json()}
                 return
+            except Exception as e:  # noqa: BLE001 - always end the stream with an event the UI understands
+                err = ErrorEvent(message=f"Could not start the model: {e}", user_action="retry")
+                yield {"event": err.type, "data": err.model_dump_json()}
+                return
             async for event in orchestrator.run(session, body.question, adapter, model):
                 yield {"event": event.type, "data": event.model_dump_json()}
 
