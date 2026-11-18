@@ -104,3 +104,19 @@ def test_query_limit_can_exceed_default_up_to_analysis_limit(retail_sqlite, sett
     settings.analysis_row_limit = 20_000
     src = SQLAlchemyDataSource("shop", ConnectionConfig(engine="sqlite", database=str(retail_sqlite)), settings)
     assert len(src.query("select * from orders", limit=1_000_000)) == 20_000
+
+
+def test_postgres_ssl_verifies_certificate_and_hostname(settings):
+    from adsci.data.databases import build_engine
+
+    cfg = ConnectionConfig(engine="postgresql", host="db.example.com", database="d", username="u", password="p", ssl=True)
+    q = build_engine(cfg, settings).url.query
+    assert q["sslmode"] == "verify-full" and q["sslrootcert"] == "system"
+
+
+def test_mysql_ssl_verifies_certificate_and_hostname(settings):
+    from adsci.data.databases import _connect_args
+
+    args = _connect_args(ConnectionConfig(engine="mysql", host="h", database="d", username="u", password="p", ssl=True),
+                         settings)
+    assert args["ssl"]["ca"] and args["ssl_verify_cert"] is True and args["ssl_verify_identity"] is True

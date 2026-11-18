@@ -82,7 +82,9 @@ def build_url(cfg: ConnectionConfig) -> URL:
         )
     query = {}
     if cfg.ssl and cfg.engine == "postgresql":
-        query["sslmode"] = "require"
+        # Encrypt AND verify the server certificate and hostname against the system CA store (libpq >= 16).
+        query["sslmode"] = "verify-full"
+        query["sslrootcert"] = "system"
     return URL.create(
         _DRIVERS[cfg.engine],
         username=cfg.username,
@@ -94,31 +96,43 @@ def build_url(cfg: ConnectionConfig) -> URL:
     )
 
 
+def _connect_args(cfg: ConnectionConfig, settings: Settings) -> dict:
+    timeout_s = settings.sql_timeout_s
+    if cfg.engine == "postgresql":
+        return {
+            "options": f"-c default_transaction_read_only=on -c statement_timeout={timeout_s * 1000}",
+            "connect_timeout": 10,
+        }
+    if cfg.engine == "mysql":
+        args: dict = {"connect_timeout": 10, "read_timeout": timeout_s + 5}
+        if cfg.ssl:
+            import certifi
+
+            # Verify the certificate chain and the hostname, not just encrypt.
+            args.update(ssl={"ca": certifi.where()}, ssl_verify_cert=True, ssl_verify_identity=True)
+        return args
+    if cfg.engine == "mssql":
+        return {"timeout": timeout_s, "login_timeout": 10}
+    if cfg.engine == "snowflake":
+        return {"session_parameters": {"STATEMENT_TIMEOUT_IN_SECONDS": timeout_s}}
+    if cfg.engine == "sqlite":
+        return {"check_same_thread": False}
+    return {}
+
+
 def build_engine(cfg: ConnectionConfig, settings: Settings) -> sa.Engine:
     """Create an engine whose sessions are read-only and time-limited where the database supports it."""
     url = build_url(cfg)
     timeout_s = settings.sql_timeout_s
-    kwargs: dict = {"pool_pre_ping": True}
     backend = url.get_backend_name()
-    if backend == "postgresql":
-        kwargs["connect_args"] = {
-            "options": f"-c default_transaction_read_only=on -c statement_timeout={timeout_s * 1000}",
-            "connect_timeout": 10,
-        }
-    elif backend == "mysql":
-        kwargs["connect_args"] = {"connect_timeout": 10, "read_timeout": timeout_s + 5}
-        if cfg.ssl:
-            kwargs["connect_args"]["ssl"] = {}
-    elif backend == "mssql":
-        kwargs["connect_args"] = {"timeout": timeout_s, "login_timeout": 10}
-    elif backend == "snowflake":
-        kwargs["connect_args"] = {"session_parameters": {"STATEMENT_TIMEOUT_IN_SECONDS": timeout_s}}
-    elif backend == "bigquery":
+    kwargs: dict = {"pool_pre_ping": True}
+    args = _connect_args(cfg, settings) if cfg.url is None or backend == cfg.engine else {}
+    if args:
+        kwargs["connect_args"] = args
+    if backend == "bigquery":
         url = url.update_query_dict({"maximum_bytes_billed": str(settings.bigquery_max_bytes_billed)})
         if cfg.credentials_json:
             kwargs["credentials_info"] = json.loads(cfg.credentials_json.get_secret_value())
-    elif backend == "sqlite":
-        kwargs = {"connect_args": {"check_same_thread": False}}
 
     engine = sa.create_engine(url, **kwargs)
 
