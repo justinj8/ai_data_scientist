@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     xai_oauth_client_id: str | None = None  # only an ID xAI issued to you; enables SuperGrok sign-in
     secret_key_file: Path | None = None
     # Run analysis kernels as another OS user (Docker sets these) so they can't read credentials.
-    kernel_user: str | None = None
-    kernel_group: str | None = None
+    # One OS user per running kernel (each with a same-named group); Docker creates them. Empty = no sandbox.
+    kernel_users: list[str] = []
     kernel_work_root: Path | None = None
     static_dir: Path | None = None  # built frontend (frontend/dist); served at / when set
     host: str = "127.0.0.1"
