@@ -14,7 +14,7 @@ const NETWORK: FieldSpec[] = [
   { key: "database", label: "Database" },
   { key: "username", label: "Username" },
   { key: "password", label: "Password", type: "password" },
-  { key: "ssl", label: "Require SSL", type: "checkbox" },
+  { key: "ssl", label: "Require TLS (verifies the certificate)", type: "checkbox" },
 ];
 
 export const ENGINES: { engine: Engine; label: string; defaultPort?: number; fields: FieldSpec[]; urlExample: string }[] = [
