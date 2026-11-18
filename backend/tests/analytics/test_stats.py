@@ -70,3 +70,9 @@ def test_interpretation_never_causal(fn, args):
     df = pd.DataFrame({"g": rng.choice(["a", "b"], 300), "v": rng.normal(size=300)})
     text = fn(df, *args).interpretation.lower()
     assert not any(c in text for c in CAUSAL)
+
+
+def test_too_many_groups_is_refused_with_guidance():
+    df = pd.DataFrame({"g": [f"id{i}" for i in range(400)] * 3, "v": np.arange(1200, dtype=float)})
+    with pytest.raises(ValueError, match="too many groups"):
+        compare_groups(df, "v", "g")
