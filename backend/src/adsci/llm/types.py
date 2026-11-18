@@ -35,6 +35,9 @@ class Message(BaseModel):
 
     role: Literal["user", "assistant"]
     parts: list[Part]
+    # The provider's raw content for this turn (e.g. Anthropic thinking blocks with signatures, OpenAI reasoning
+    # items). Replayed verbatim to the same provider; other providers use ``parts``.
+    provider_state: dict | None = None
 
     @property
     def text(self) -> str:
@@ -73,7 +76,8 @@ class ToolCallEvent(BaseModel):
 
 class TurnEnd(BaseModel):
     type: Literal["turn_end"] = "turn_end"
-    stop_reason: Literal["end_turn", "tool_use", "max_tokens"]
+    provider_state: dict | None = None
+    stop_reason: Literal["end_turn", "tool_use", "max_tokens", "refusal"]
     usage: Usage
 
 
