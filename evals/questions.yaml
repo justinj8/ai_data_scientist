@@ -1,0 +1,74 @@
+# Ground-truth questions over the seeded retail sample data (see sample_data/out/ground_truth.json).
+# Sources: "files" = orders.csv + customers.csv loaded as tables; "retail_sqlite" = the same data in SQLite.
+- id: total-revenue-2025
+  question: What was total revenue in 2025?
+  check: {type: numeric, key: total_revenue_2025, tolerance: 0.01}
+- id: yoy-growth
+  question: By how much did total revenue grow from 2024 to 2025, in percent?
+  check: {type: numeric, key: yoy_revenue_growth_2025, tolerance: 0.03}
+- id: order-count
+  question: How many orders are in the data?
+  check: {type: numeric, key: n_orders, tolerance: 0}
+- id: top-category
+  question: Which product category had the most revenue in 2025?
+  check: {type: contains_all, values: [electronics]}
+- id: q4-share
+  question: What share of 2024 revenue came from Q4?
+  check: {type: numeric, key: q4_share_2024, tolerance: 0.03}
+- id: west-aov
+  question: Do West region orders have a higher average order value than other regions? By how much, and is it statistically significant?
+  check: {type: numeric, key: west_aov_ratio, tolerance: 0.01}
+- id: west-aov-significance
+  question: Is the difference in average order value between the West and the other regions statistically significant? Report the test and effect size.
+  check: {type: rubric, criteria: "Says the difference is statistically significant, names a statistical test, and reports an effect size."}
+- id: promo-uplift
+  question: How much larger is the average promo order than a non-promo order, in percent?
+  check: {type: numeric, key: promo_aov_uplift, tolerance: 0.03}
+- id: churn-rate
+  question: What is the customer churn rate?
+  check: {type: numeric, key: churn_rate, tolerance: 0.01}
+- id: region-churn-null
+  question: Does churn differ by region?
+  check: {type: contains_any, values: ["not statistically significant", "no statistically significant", "no significant", "not significant", "does not differ", "doesn't differ"]}
+- id: churn-drivers
+  question: What are the strongest predictors of customer churn?
+  check: {type: contains_any, values: [last_login, login]}
+- id: churn-model-quality
+  question: How well can we predict churn? Compare a model against a simple baseline.
+  check: {type: rubric, criteria: "Reports a held-out or cross-validated metric such as ROC-AUC for a model and compares it with a baseline, and the model clearly beats the baseline."}
+- id: churn-causation-caution
+  question: Do support tickets cause customers to churn?
+  check: {type: rubric, criteria: "Explains that the data is observational, so it can show association but not prove causation; does not claim tickets cause churn as established fact."}
+- id: spike-days
+  question: Were there any unusually high revenue days? List the dates.
+  check: {type: set, key: anomaly_spike_dates}
+- id: outage-days
+  question: Were there days when revenue dropped to almost nothing? Which dates?
+  check: {type: set, key: outage_dates}
+- id: forecast-30
+  question: Forecast total daily revenue for the next 30 days, with uncertainty.
+  check: {type: rubric, criteria: "Gives a 30-day forecast with a prediction interval or range, mentions how the forecasting model was validated (e.g. backtest or comparison with a naive forecast)."}
+- id: weekly-seasonality
+  question: Is there a weekly pattern in daily revenue?
+  check: {type: contains_any, values: [weekend, saturday, sunday, "day of week", "day-of-week", weekly]}
+- id: segments
+  question: Segment customers by tenure, monthly spend, support tickets and days since last login. Describe the segments.
+  check: {type: rubric, criteria: "Describes at least two customer segments with their sizes and what distinguishes them, and mentions how well-separated the segments are (e.g. silhouette)."}
+- id: data-quality
+  question: Profile the customers table. Are there any data-quality issues to be aware of?
+  check: {type: contains_any, values: [customer_id, identifier]}
+- id: cross-source
+  question: Using the orders file and the customers table in the SQLite database, which customer plan generated the most order revenue?
+  check: {type: rubric, criteria: "Joins orders with customers by customer_id across the two sources and names the plan with the most revenue, giving revenue figures."}
+- id: sqlite-count
+  question: How many customers are on each plan in the retail_sqlite database?
+  check: {type: contains_all, values: [basic, pro, enterprise]}
+- id: channel-mix
+  question: What share of orders comes from each channel?
+  check: {type: contains_all, values: [web, app, store]}
+- id: region-totals
+  question: Which region had the highest total revenue over the whole period?
+  check: {type: contains_all, values: [west]}
+- id: correlation-units-price
+  question: Is the number of units in an order correlated with its revenue? Give the correlation coefficient.
+  check: {type: rubric, criteria: "Reports a positive correlation coefficient between units and revenue and says whether it is statistically significant."}
