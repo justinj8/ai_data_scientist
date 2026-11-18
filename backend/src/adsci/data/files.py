@@ -23,8 +23,39 @@ _META_COLUMNS = "_adsci_columns"
 _META_TABLES = "_adsci_tables"
 
 
-def _coerce_types(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert text columns that are really numbers (``1,234.50``) or dates (mixed formats)."""
+_DATEISH = re.compile(
+    r"^(\d{4}-\d{1,2}-\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?)?"
+    r"|\d{4}/\d{1,2}/\d{1,2}"
+    r"|\d{1,2}[/.-]\d{1,2}[/.-](\d{4}|\d{2})"
+    r"|[A-Za-z]{3,9}\.? \d{1,2},? \d{4}"
+    r"|\d{1,2} [A-Za-z]{3,9}\.? \d{4})$"
+)
+_ISO = re.compile(r"^\d{4}-\d{1,2}-\d{1,2}")
+_DATE_FORMATS = [
+    "%Y/%m/%d", "%d/%m/%Y", "%m/%d/%Y", "%d.%m.%Y", "%d-%m-%Y", "%m-%d-%Y", "%d/%m/%y", "%m/%d/%y",
+    "%b %d %Y", "%b %d, %Y", "%B %d %Y", "%B %d, %Y", "%d %b %Y", "%d %B %Y",
+]
+
+
+def _parse_dates(values: pd.Series) -> tuple[str | None, pd.Series | None, list[str]]:
+    """Pick ONE format for the whole column (no per-value guessing); returns (format, parsed, notes)."""
+    if values.str.match(_ISO).mean() >= 0.9:
+        return "ISO8601", pd.to_datetime(values, format="ISO8601", errors="coerce"), []
+    results = {f: pd.to_datetime(values, format=f, errors="coerce") for f in _DATE_FORMATS}
+    best = max(results, key=lambda f: results[f].notna().sum())
+    notes: list[str] = []
+    for day_first, month_first in (("%d/%m/%Y", "%m/%d/%Y"), ("%d-%m-%Y", "%m-%d-%Y"), ("%d/%m/%y", "%m/%d/%y")):
+        if best in (day_first, month_first):
+            d, m = results[day_first].notna().sum(), results[month_first].notna().sum()
+            if d == m:  # every value fits both orders: genuinely ambiguous
+                best = month_first
+                notes.append("dates could be day/month or month/day; read as month/day")
+    return best, results[best], notes
+
+
+def _coerce_types(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Convert text columns that are really numbers (``1,234.50``) or dates; report anything lost."""
+    warns: list[str] = []
     for col in df.columns:
         s = df[col]
         if not (s.dtype == object or pd.api.types.is_string_dtype(s)):
@@ -36,15 +67,21 @@ def _coerce_types(df: pd.DataFrame) -> pd.DataFrame:
         if values.str.match(_NUMBER).all():
             df[col] = pd.to_numeric(s.astype(str).str.strip().str.replace(",", "", regex=False), errors="coerce")
             continue
-        if values.str.contains(_HAS_DIGIT).mean() >= 0.9:
-            with _warnings.catch_warnings():
-                _warnings.simplefilter("ignore")
-                parsed = pd.to_datetime(values, format="mixed", errors="coerce")
-            if parsed.notna().mean() >= 0.9:
-                with _warnings.catch_warnings():
-                    _warnings.simplefilter("ignore")
-                    df[col] = pd.to_datetime(s, format="mixed", errors="coerce")
-    return df
+        if values.str.match(_DATEISH).mean() < 0.9:
+            continue
+        fmt, parsed, notes = _parse_dates(values)
+        if parsed is None or parsed.notna().mean() < 0.9:
+            continue
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("ignore")
+            df[col] = pd.to_datetime(s.astype("string").str.strip(), format=fmt, errors="coerce")
+        lost = int(parsed.isna().sum())
+        if lost:
+            plural = lost != 1
+            warns.append(f"Column {col}: {lost} value{'s' if plural else ''} couldn't be read as a date and "
+                         f"{'were' if plural else 'was'} left empty.")
+        warns += [f"Column {col}: {n}." for n in notes]
+    return df, warns
 
 
 def _detect_encoding(path: Path) -> str:
@@ -73,7 +110,8 @@ def load_csv(path: Path) -> tuple[pd.DataFrame, list[str]]:
         warns.append(f"Read with {encoding} encoding.")
     df = pd.read_csv(path, sep=delimiter, encoding=encoding, low_memory=False)
     df.columns = dedupe([str(c).strip() for c in df.columns])
-    return _coerce_types(df), warns
+    df, notes = _coerce_types(df)
+    return df, warns + notes
 
 
 def _find_header(rows: list[tuple]) -> int:
@@ -106,7 +144,8 @@ def load_xlsx(path: Path, skipped: list[str] | None = None) -> dict[str, tuple[p
             names = dedupe([str(v).strip() if v is not None else f"column_{i + 1}" for i, v in enumerate(header)])
             data = [list(r[: len(names)]) + [None] * (len(names) - len(r)) for r in rows[h + 1 :]]
             df = pd.DataFrame(data, columns=names)
-            out[ws.title] = (_coerce_types(df), warns)
+            df, notes = _coerce_types(df)
+            out[ws.title] = (df, warns + notes)
     finally:
         wb.close()
     return out

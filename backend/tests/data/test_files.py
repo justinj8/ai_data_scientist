@@ -95,3 +95,32 @@ def test_duckdb_cannot_read_host_files_even_unguarded(tmp_path):
     src = FileDataSource("files", tmp_path / "s.duckdb")
     with pytest.raises(duckdb.Error):
         src._con.execute(f"select * from '{secret}'").fetchall()
+
+
+def _csv(tmp_path, text):
+    p = tmp_path / "d.csv"
+    p.write_text(text)
+    return p
+
+
+def test_day_first_dates_parsed_consistently(tmp_path):
+    df, _ = load_csv(_csv(tmp_path, "d,v\n03/04/2024,1\n13/04/2024,2\n25/12/2024,3\n"))
+    assert [str(x.date()) for x in df["d"]] == ["2024-04-03", "2024-04-13", "2024-12-25"]
+
+
+def test_ambiguous_slash_dates_default_to_month_first_with_warning(tmp_path):
+    df, warns = load_csv(_csv(tmp_path, "d,v\n03/04/2024,1\n05/06/2024,2\n"))
+    assert str(df["d"].iloc[0].date()) == "2024-03-04"
+    assert any("month/day" in w for w in warns)
+
+
+def test_fractions_and_codes_are_not_dates(tmp_path):
+    df, _ = load_csv(_csv(tmp_path, "ratio,code\n3/4,1-2\n1/2,3-4\n5/8,2-9\n"))
+    assert df["ratio"].tolist() == ["3/4", "1/2", "5/8"] and df["code"].tolist() == ["1-2", "3-4", "2-9"]
+
+
+def test_unparseable_dates_are_reported(tmp_path):
+    rows = "\n".join(f"2024-01-{d:02d},{d}" for d in range(1, 21)) + "\nnot a date,21\n"
+    df, warns = load_csv(_csv(tmp_path, "d,v\n" + rows))
+    assert str(df["d"].dtype).startswith("datetime64") and df["d"].isna().sum() == 1
+    assert any("1 value" in w and "d" in w for w in warns)
