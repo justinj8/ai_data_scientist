@@ -8,7 +8,7 @@ from adsci.kernel.manager import Output
 
 def notebook_code(data: DataRef, call: str) -> str:
     """Notebook cell that reproduces a tool call: load the data with sql(), then call the analytics function."""
-    return f'df = sql("""{data.sql}""", source="{data.source}")\n{call}'
+    return f"df = sql({data.sql!r}, source={data.source!r})\n{call}"
 
 
 def record(ctx, data: DataRef, call: str, outputs: list[Output] | None = None) -> str:

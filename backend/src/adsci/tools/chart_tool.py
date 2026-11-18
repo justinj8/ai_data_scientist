@@ -58,6 +58,16 @@ def build_figure(df, args: CreateChartInput):
     return fig, df
 
 
+def chart_code(args: CreateChartInput) -> str:
+    """A notebook cell that rebuilds the chart; every value is a Python literal (repr), so quotes are safe."""
+    return (
+        f"df = sql({args.data.sql!r}, source={args.data.source!r})\n"
+        "from adsci.tools.chart_tool import CreateChartInput, build_figure\n"
+        f"fig, _ = build_figure(df, CreateChartInput.model_validate_json({args.model_dump_json()!r}))\n"
+        "show(fig)"
+    )
+
+
 class CreateChartTool(Tool):
     name = "create_chart"
     description = (
@@ -70,13 +80,7 @@ class CreateChartTool(Tool):
         df, warns = await ctx.load(args.data)
         fig, plotted = build_figure(df, args)
         figure = figure_to_plain(fig)
-        code = (
-            f'df = sql("""{args.data.sql}""", source="{args.data.source}")\n'
-            f"# create_chart: {args.model_dump_json(exclude={'data'})}\n"
-            "from adsci.tools.chart_tool import CreateChartInput, build_figure\n"
-            f"fig, _ = build_figure(df, CreateChartInput.model_validate_json('{args.model_dump_json()}'))\n"
-            "show(fig)"
-        )
+        code = chart_code(args)
         ctx.notebook.add_python(code, [PlotlyOutput(figure=figure)])
         summary = f"Created {args.kind} chart '{args.title}' from {len(df)} rows. Plotted data:\n"
         summary += summarize_frame(plotted)
