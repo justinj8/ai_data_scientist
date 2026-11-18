@@ -10,9 +10,15 @@ from adsci.app.main import create_app
 from adsci.config import Settings
 
 
+@pytest.fixture(autouse=True)
+def _no_ambient_provider_keys(monkeypatch):
+    for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+
+
 @pytest.fixture
 def settings(tmp_path):
-    return Settings(data_dir=tmp_path / "data")
+    return Settings(data_dir=tmp_path / "data", secret_key_file=tmp_path / "secret.key")
 
 
 @pytest.fixture
@@ -31,7 +37,7 @@ def _free_port() -> int:
 def live_app(tmp_path):
     port = _free_port()
     base = f"http://127.0.0.1:{port}"
-    app = create_app(Settings(data_dir=tmp_path / "data", internal_base_url=base))
+    app = create_app(Settings(data_dir=tmp_path / "data", internal_base_url=base, secret_key_file=tmp_path / "secret.key"))
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     t = threading.Thread(target=server.run, daemon=True)
     t.start()

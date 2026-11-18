@@ -9,9 +9,11 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI
 
-from adsci.app.routes import data, internal
+from adsci.app.routes import data, internal, models
 from adsci.app.sessions import SessionManager
+from adsci.auth.store import CredentialStore, load_store_key
 from adsci.config import Settings, get_settings
+from adsci.llm.registry import AdapterFactory, ModelRegistry
 
 REAP_INTERVAL_S = 300
 
@@ -37,6 +39,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="AI Data Scientist", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.sessions = sessions
+    store = CredentialStore(settings.data_dir / "credentials.enc", load_store_key(settings))
+    app.state.credentials = store
+    app.state.adapters = AdapterFactory(store)
+    app.state.models = ModelRegistry(store, lambda provider: app.state.adapters(provider))
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
@@ -44,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(data.router)
     app.include_router(internal.router)
+    app.include_router(models.router)
     return app
 
 
