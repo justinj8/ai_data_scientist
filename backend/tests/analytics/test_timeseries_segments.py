@@ -73,3 +73,13 @@ def test_monthly_frequency_inferred():
                       "v": [100 + (i % 12) * 5 + i for i in range(72)]})
     r = forecast_series(s, "m", "v", horizon=6)
     assert r.freq in {"MS", "M"} and r.seasonal_period == 12
+
+
+def test_partial_final_period_is_dropped_with_warning(orders):
+    cut = orders[orders["order_date"] <= "2025-11-05"]
+    daily = cut.groupby("order_date", as_index=False)["revenue"].sum()
+    r = forecast_series(daily, "order_date", "revenue", horizon=3, freq="MS")
+    assert r.history[-1].date == "2025-10-01"
+    assert r.forecast[0].date == "2025-11-01"
+    assert any("incomplete" in w.lower() for w in r.warnings)
+    assert min(p.value for p in r.forecast) > 250_000  # not dragged down by a 5-day "month"
