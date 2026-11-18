@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     public_base_url: str = "http://127.0.0.1:8000"
     sample_dir: Path | None = None
     internal_base_url: str = "http://127.0.0.1:8000"
+    secret_key_file: Path | None = None  # set in Docker; otherwise the OS keychain holds the key
 
 
 @lru_cache
