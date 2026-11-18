@@ -139,3 +139,12 @@ async def test_list_models():
     models = {m.id: m for m in await a.list_models()}
     assert models["gpt-6.2-astra"].family == "gpt" and models["gpt-6.2-astra"].created.year == 2025
     assert models["gpt-image-2.6-flare"].supports_tools is False
+
+
+async def test_list_models_with_chatgpt_plan_shape():
+    a, rec = make(httpx2.Response(200, json={"models": [
+        {"slug": "gpt-6.2-astra", "display_name": "GPT-6.2 Astra", "visibility": "list"},
+        {"slug": "gpt-6-internal", "display_name": "hidden", "visibility": "hide"}]}), billed_to="chatgpt_plan")
+    models = await a.list_models()
+    assert [m.id for m in models] == ["gpt-6.2-astra"] and models[0].display_name == "GPT-6.2 Astra"
+    assert rec.requests[-1].headers["authorization"] == "Bearer tok-123"
