@@ -207,3 +207,16 @@ def generate(out_dir: Path, seed: int = 42) -> dict:
 
     (out_dir / "ground_truth.json").write_text(json.dumps(truth, indent=2))
     return truth
+
+
+def ensure_samples(settings) -> Path:
+    """Return a directory with the sample files, generating them under ``data_dir`` if needed."""
+    candidates = [settings.sample_dir] if settings.sample_dir else []
+    candidates.append(Path(__file__).resolve().parents[3] / "sample_data" / "out")
+    for d in candidates:
+        if d and (Path(d) / "retail.db").exists() and (Path(d) / "orders.csv").exists():
+            return Path(d)
+    out = Path(settings.data_dir) / "samples"
+    if not (out / "retail.db").exists():
+        generate(out)
+    return out
