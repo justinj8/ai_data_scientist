@@ -2,6 +2,7 @@
 services:
   app:
     build: .
+    init: true                   # a real PID 1 that reaps orphaned processes (e.g. killed kernel leftovers)
     ports:
       - "127.0.0.1:8000:8000"   # ChatGPT sign-in redirects to http://127.0.0.1:8000/auth/callback
     env_file:
