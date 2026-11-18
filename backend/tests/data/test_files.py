@@ -124,3 +124,19 @@ def test_unparseable_dates_are_reported(tmp_path):
     df, warns = load_csv(_csv(tmp_path, "d,v\n" + rows))
     assert str(df["d"].dtype).startswith("datetime64") and df["d"].isna().sum() == 1
     assert any("1 value" in w and "d" in w for w in warns)
+
+
+def test_xlsx_title_above_numeric_year_headers(tmp_path):
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Rev"
+    ws["A1"] = "Revenue by year"
+    ws.append(["region", 2022, 2023, 2024])
+    ws.append(["West", 10, 11, 12])
+    ws.append(["East", 9, 10, 11])
+    wb.save(tmp_path / "rev.xlsx")
+    df, warns = load_xlsx(tmp_path / "rev.xlsx")["Rev"]
+    assert list(df.columns) == ["region", "2022", "2023", "2024"] and len(df) == 2
+    assert any("title row" in w for w in warns)
