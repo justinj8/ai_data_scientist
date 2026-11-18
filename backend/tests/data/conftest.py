@@ -20,7 +20,7 @@ def messy_dir(tmp_path):
         "Malmö;5.5;2024-04-11\n".encode("latin-1")
     )
     # UTF-8 with BOM, comma-delimited.
-    (d / "bom.csv").write_bytes("﻿id,value\n1,10\n2,20\n".encode("utf-8"))
+    (d / "bom.csv").write_bytes("﻿id,value\n1,10\n2,20\n".encode())
 
     wb = openpyxl.Workbook()
     ws = wb.active
