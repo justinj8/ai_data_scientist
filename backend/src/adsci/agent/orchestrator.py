@@ -125,7 +125,8 @@ class Orchestrator:
             yield ErrorEvent(message=f"Something went wrong while answering: {type(e).__name__}: {e}",
                              user_action="retry")
             return
-        yield VerificationEvent(status=result.status, ungrounded=result.ungrounded, issues=result.issues)
+        yield VerificationEvent(status=result.status, ungrounded=result.ungrounded, issues=result.issues,
+                                notes=result.notes)
         yield UsageEvent(usage=run.usage, model_id=model.id)
         run.record.answer = run.answer
         run.record.verification = result
