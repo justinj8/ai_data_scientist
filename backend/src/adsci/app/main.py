@@ -50,7 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="AI Data Scientist", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
-    if settings.kernel_user:
+    if settings.kernel_users:
         # Sandboxed kernels (Docker) must not reach the control API through localhost.
         app.add_middleware(SandboxBoundaryMiddleware)
     app.state.sessions = sessions

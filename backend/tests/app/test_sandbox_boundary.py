@@ -7,7 +7,7 @@ from adsci.config import Settings
 
 @pytest.fixture
 def sandboxed(tmp_path):
-    settings = Settings(data_dir=tmp_path / "data", secret_key_file=tmp_path / "k", kernel_user="kernel",
+    settings = Settings(data_dir=tmp_path / "data", secret_key_file=tmp_path / "k", kernel_users=["kernel0"],
                         allowed_hosts=["127.0.0.1", "localhost", "testserver"])
     return create_app(settings)
 

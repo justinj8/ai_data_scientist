@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from adsci.config import Settings
 from adsci.data.base import DataSource
 from adsci.data.files import FileDataSource
+from adsci.kernel.pool import KernelUserPool
 
 FILES_SOURCE = "files"
 
@@ -36,6 +37,8 @@ class Session:
     model_id: str | None = None
     notebook: Any = None
     kernel: Any = None
+    kernel_user: str | None = None
+    kernel_pool: KernelUserPool | None = None
     internal_token: str = field(default_factory=lambda: secrets.token_urlsafe(32))
     last_active: datetime = field(default_factory=_now)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -73,6 +76,9 @@ class Session:
         except Exception:  # noqa: BLE001 - closing is best-effort
             pass
         self.kernel = None
+        if self.kernel_pool is not None:
+            self.kernel_pool.release(self.kernel_user)
+        self.kernel_user = None
         return True
 
     def close(self) -> None:
@@ -89,13 +95,14 @@ class SessionManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._sessions: dict[str, Session] = {}
+        self.kernel_pool = KernelUserPool(settings.kernel_users)
         self._lock = threading.Lock()
 
     def create(self) -> Session:
         sid = secrets.token_hex(8)
         d = self.settings.data_dir / "sessions" / sid
         d.mkdir(parents=True, exist_ok=True)
-        s = Session(id=sid, dir=d, settings=self.settings)
+        s = Session(id=sid, dir=d, settings=self.settings, kernel_pool=self.kernel_pool)
         with self._lock:
             self._sessions[sid] = s
         return s
