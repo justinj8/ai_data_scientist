@@ -29,8 +29,9 @@ SUBSCRIPTIONS = {
         "subscription_supported": True,
         "subscription_experimental": True,
         "subscription_note": (
-            "Experimental: xAI only allows some SuperGrok tiers to use the API this way. "
-            "If sign-in works but requests fail, add an xAI API key instead."
+            "Experimental and off by default: xAI doesn't yet offer sign-in for third-party apps, so it needs an "
+            "OAuth client ID issued to you by xAI (ADSCI_XAI_OAUTH_CLIENT_ID). xAI also limits API use to some "
+            "SuperGrok tiers. Use an xAI API key otherwise."
         ),
     },
 }
@@ -59,7 +60,13 @@ async def list_all(request: Request) -> dict:
 @router.get("/credentials")
 def credentials(request: Request) -> dict:
     status = request.app.state.credentials.status()
-    return {"providers": {p: {**status[p].model_dump(), **SUBSCRIPTIONS[p]} for p in PROVIDERS}}
+    available = {"anthropic": False, "openai": True, "xai": request.app.state.grok.available}
+    return {
+        "providers": {
+            p: {**status[p].model_dump(), **SUBSCRIPTIONS[p], "subscription_available": available[p]}
+            for p in PROVIDERS
+        }
+    }
 
 
 @router.put("/credentials/{provider}/api-key")

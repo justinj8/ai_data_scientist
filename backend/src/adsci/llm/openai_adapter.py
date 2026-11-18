@@ -199,7 +199,24 @@ class OpenAICompatAdapter:
             provider_state={"provider": self.provider, "model": final.model, "output": output},
         )
 
+    async def _plan_models(self) -> list[ModelInfo]:
+        """Plan tokens get a different model-list shape: {"models": [{"slug", "display_name", "visibility"}]}."""
+        http = self.http_client or httpx2.AsyncClient(timeout=30)
+        r = await http.get(f"{self.base_url}/models", headers={"Authorization": f"Bearer {await self.token_provider()}"})
+        if r.status_code >= 400:
+            raise self._map_error(openai.APIStatusError(r.text, response=r, body=None))
+        out = []
+        for m in r.json().get("models", []):
+            if m.get("visibility", "list") != "list":
+                continue
+            family = openai_family(m["slug"])
+            out.append(ModelInfo(id=m["slug"], provider=self.provider, family=family,
+                                 display_name=m.get("display_name") or m["slug"], supports_tools=family != "other"))
+        return out
+
     async def list_models(self) -> list[ModelInfo]:
+        if self.billed_to == "chatgpt_plan":
+            return await self._plan_models()
         try:
             client = await self._client()
             models = [m async for m in client.models.list()]
