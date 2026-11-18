@@ -76,3 +76,13 @@ async def test_internal_sql_rejects_bad_token(live_app):
         r = await c.post(f"/internal/sessions/{sid}/sql", json={"query": "select 1", "source": "files"},
                          headers={"X-ADSCI-Token": "wrong"})
     assert r.status_code == 403
+
+
+async def test_close_sync_kills_kernel(tmp_path):
+    k = KernelSession("c", tmp_path, internal_url="http://127.0.0.1:9", token="t")
+    await k.start()
+    k.close_sync()
+    import asyncio
+
+    await asyncio.sleep(0.5)
+    assert not await k._km.is_alive()

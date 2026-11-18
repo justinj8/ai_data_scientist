@@ -42,7 +42,12 @@ class Session:
     def files(self) -> FileDataSource:
         src = self.sources.get(FILES_SOURCE)
         if src is None:
-            src = FileDataSource(FILES_SOURCE, self.dir / "files.duckdb", row_limit=self.settings.sql_row_limit)
+            src = FileDataSource(
+                FILES_SOURCE,
+                self.dir / "files.duckdb",
+                row_limit=self.settings.sql_row_limit,
+                max_limit=self.settings.analysis_row_limit,
+            )
             self.sources[FILES_SOURCE] = src
         return src  # type: ignore[return-value]
 
@@ -57,6 +62,12 @@ class Session:
         self.last_active = _now()
 
     def close(self) -> None:
+        if self.kernel is not None:
+            try:
+                self.kernel.close_sync()
+            except Exception:  # noqa: BLE001 - closing is best-effort
+                pass
+            self.kernel = None
         for src in self.sources.values():
             try:
                 src.close()

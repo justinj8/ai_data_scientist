@@ -118,9 +118,10 @@ class FileDataSource:
     kind: Literal["file"] = "file"
     dialect = "duckdb"
 
-    def __init__(self, name: str, db_path: Path, row_limit: int = 10_000) -> None:
+    def __init__(self, name: str, db_path: Path, row_limit: int = 10_000, max_limit: int = 1_000_000) -> None:
         self.name = name
         self.row_limit = row_limit
+        self.max_limit = max_limit
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._con = duckdb.connect(str(self.db_path))
@@ -190,8 +191,8 @@ class FileDataSource:
         return list(tables.values())
 
     def query(self, sql: str, limit: int | None = None) -> pd.DataFrame:
-        """Run a guarded, read-only query; at most ``limit`` (default ``row_limit``) rows."""
-        sql = guard_sql(sql, self.dialect, min(limit or self.row_limit, self.row_limit))
+        """Run a guarded, read-only query returning ``limit`` rows (default ``row_limit``, capped at ``max_limit``)."""
+        sql = guard_sql(sql, self.dialect, min(limit or self.row_limit, self.max_limit))
         with self._lock:
             return self._con.execute(sql).df()
 

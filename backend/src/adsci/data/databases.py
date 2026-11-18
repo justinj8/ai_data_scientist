@@ -206,9 +206,10 @@ class SQLAlchemyDataSource:
         return None
 
     def query(self, sql: str, limit: int | None = None) -> pd.DataFrame:
-        """Run a guarded, read-only query; at most ``limit`` (default ``sql_row_limit``) rows."""
-        cap = self.settings.sql_row_limit
-        safe = guard_sql(sql, self.dialect, min(limit or cap, cap))
+        """Run a guarded, read-only query returning ``limit`` rows (default ``sql_row_limit``,
+        capped at ``analysis_row_limit``)."""
+        n = min(limit or self.settings.sql_row_limit, self.settings.analysis_row_limit)
+        safe = guard_sql(sql, self.dialect, n)
         with self.engine.connect() as c:
             return pd.read_sql(sa.text(safe), c)
 

@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
     max_agent_steps: int = 12
     kernel_timeout_s: int = 60
-    sql_row_limit: int = 10_000
+    sql_row_limit: int = 10_000  # default rows returned to the UI / model
+    analysis_row_limit: int = 1_000_000  # max rows loaded for analysis (tools, kernel sql())
     sql_timeout_s: int = 30
     preview_rows: int = 50
     model_summary_chars: int = 4000
