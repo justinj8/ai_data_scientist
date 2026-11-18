@@ -40,6 +40,7 @@ PRICES: dict[str, tuple[float, float]] = {
     "claude-fable-5-2": (8.0, 40.0),
 }
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+BINDING_BETA = "thinking-binding-controls-2026-08-01"
 DEFAULT_BASE_URL = "https://api.anthropic.com"
 
 
@@ -121,7 +122,10 @@ class AnthropicAdapter:
             "system": system,
             "messages": to_anthropic_messages(messages),
             "output_config": {"effort": self.effort},
-            "betas": [FALLBACK_BETA],
+            # A changed history (new data source in the system prompt, model switch, compaction) invalidates
+            # later thinking blocks; drop them instead of failing the request.
+            "thinking": {"type": "adaptive", "block_binding": {"prefix_mismatch_behavior": "drop_block"}},
+            "betas": [FALLBACK_BETA, BINDING_BETA],
             "fallbacks": "default",
         }
         if tools:

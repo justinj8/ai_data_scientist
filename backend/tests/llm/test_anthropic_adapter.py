@@ -81,7 +81,9 @@ async def test_stream_text_then_tool_call():
     body = json.loads(rec.requests[-1].content)
     assert body["model"] == "claude-opus-5-5" and body["system"] == "sys"
     assert body["fallbacks"] == "default" and body["output_config"]["effort"] == "high"
-    assert "thinking" not in body  # Opus 5.5 is always adaptive
+    # Adaptive thinking; blocks invalidated by a history change are dropped instead of failing the request.
+    assert body["thinking"] == {"type": "adaptive", "block_binding": {"prefix_mismatch_behavior": "drop_block"}}
+    assert "thinking-binding-controls-2026-08-01" in rec.requests[-1].headers["anthropic-beta"]
 
 
 async def test_refusal_maps_to_refusal_stop_reason():
