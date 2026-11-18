@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+# App data / secrets
+data/
+backend/data/
+.env
+*.key
+# Frontend
+node_modules/
+frontend/dist/
+# Generated
+sample_data/out/*.db
+evals/results/raw/
+# Tooling scratch
+.superpowers/
+.DS_Store
