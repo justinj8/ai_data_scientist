@@ -80,7 +80,7 @@ async def _run(args) -> None:
     base = f"http://127.0.0.1:{port}"
     settings = Settings(data_dir=Path(args.data_dir), internal_base_url=base, port=port)
     app = create_app(settings)
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", proxy_headers=False))
     threading.Thread(target=server.run, daemon=True).start()
     while not server.started:
         await asyncio.sleep(0.05)

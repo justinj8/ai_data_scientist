@@ -128,12 +128,7 @@ class KernelSession:
 
     async def start(self) -> None:
         self.workdir.mkdir(parents=True, exist_ok=True)
-        env = kernel_env({
-            "ADSCI_INTERNAL_URL": self.internal_url,
-            "ADSCI_SESSION_ID": self.session_id,
-            "ADSCI_TOKEN": self.token,
-            "ADSCI_PREVIEW_ROWS": str(self.preview_rows),
-        })
+        env = self._env()
         if self.run_as:
             self._prepare_shared_workdir()
             spec_root = Path(tempfile.mkdtemp(prefix="adsci-kernelspec-"))
@@ -148,6 +143,24 @@ class KernelSession:
             self._km = AsyncKernelManager(kernel_name="python3")
         await self._km.start_kernel(cwd=str(self.workdir), env=env)
         await self._connect()
+
+    def _env(self) -> dict[str, str]:
+        extra = {
+            "ADSCI_INTERNAL_URL": self.internal_url,
+            "ADSCI_SESSION_ID": self.session_id,
+            "ADSCI_TOKEN": self.token,
+            "ADSCI_PREVIEW_ROWS": str(self.preview_rows),
+        }
+        if self.run_as:
+            # Sandbox users are reused across sessions: give each kernel a fresh home inside its own session
+            # directory and ignore per-user site-packages, so nothing planted by an earlier session runs here.
+            extra.update(
+                HOME=str(self.workdir),
+                IPYTHONDIR=str(self.workdir / ".ipython"),
+                MPLCONFIGDIR=str(self.workdir / ".config" / "matplotlib"),
+                PYTHONNOUSERSITE="1",
+            )
+        return kernel_env(extra)
 
     def _prepare_shared_workdir(self) -> None:
         """Let the sandbox user (a member of ``group``) use the work directory, and nothing else of ours."""

@@ -93,8 +93,17 @@ def _mount_frontend(app: FastAPI, dist) -> None:
         return FileResponse(root / "index.html")
 
 
+def server_config(app: FastAPI, settings: Settings):
+    """The uvicorn configuration the app is served with."""
+    import uvicorn
+
+    # No proxy sits in front of the app, so never trust X-Forwarded-For: a sandboxed kernel calling over
+    # localhost could otherwise claim to be the browser and get past the sandbox boundary check.
+    return uvicorn.Config(app, host=settings.host, port=settings.port, proxy_headers=False, forwarded_allow_ips="")
+
+
 def run() -> None:
     import uvicorn
 
     settings = get_settings()
-    uvicorn.run("adsci.app.main:create_app", factory=True, host=settings.host, port=settings.port)
+    uvicorn.Server(server_config(create_app(settings), settings)).run()
