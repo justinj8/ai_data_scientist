@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError, SqlglotError
@@ -20,6 +22,8 @@ _FORBIDDEN_NODES = tuple(t for n in _FORBIDDEN_NODE_NAMES if (t := getattr(exp, 
 _FORBIDDEN_FUNC_EXACT = {"glob", "load_file", "pg_sleep", "sleep", "benchmark", "query_table", "query"}
 _FORBIDDEN_FUNC_PREFIX = ("read_", "pg_read", "pg_ls", "pg_stat_file", "lo_", "dblink", "xp_", "sp_")
 _FORBIDDEN_FUNC_SUFFIX = ("_scan",)
+# DuckDB treats a quoted table name like '/data/x.csv' as "read this file" (a replacement scan).
+_FILE_LIKE = re.compile(r"[/\\*?]|\.(csv|tsv|txt|json|jsonl|ndjson|parquet|xlsx?|gz|zst|db|duckdb|sqlite3?)$", re.I)
 _ALLOWED_ROOTS = tuple(t for n in ("Select", "Union", "Intersect", "Except", "SetOperation") if (t := getattr(exp, n, None)))
 
 
@@ -50,6 +54,10 @@ def guard_sql(sql: str, dialect: str, limit: int) -> str:
     for node in root.walk():
         if isinstance(node, _FORBIDDEN_NODES):
             raise UnsafeSQLError(f"{node.key.upper()} is not allowed: this connection is read-only.")
+        if isinstance(node, exp.Table) and _FILE_LIKE.search(node.name or ""):
+            raise UnsafeSQLError(
+                f"'{node.name}' looks like a file path; queries may only read loaded tables, not files."
+            )
         if isinstance(node, exp.Func):
             name = _function_name(node)
             if (

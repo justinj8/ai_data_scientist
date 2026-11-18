@@ -84,3 +84,14 @@ def test_query_limit_can_exceed_default_up_to_max(tmp_path):
     assert len(src.query("select * from customers")) == 10
     assert len(src.query("select * from customers", limit=50)) == 50
     assert len(src.query("select * from customers", limit=10_000)) == 100
+
+
+def test_duckdb_cannot_read_host_files_even_unguarded(tmp_path):
+    import duckdb
+    import pytest
+
+    secret = tmp_path / "secret.csv"
+    secret.write_text("password\nhunter2\n")
+    src = FileDataSource("files", tmp_path / "s.duckdb")
+    with pytest.raises(duckdb.Error):
+        src._con.execute(f"select * from '{secret}'").fetchall()
