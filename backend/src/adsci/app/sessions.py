@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import secrets
 import shutil
 import threading
@@ -37,6 +38,7 @@ class Session:
     kernel: Any = None
     internal_token: str = field(default_factory=lambda: secrets.token_urlsafe(32))
     last_active: datetime = field(default_factory=_now)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     @property
     def files(self) -> FileDataSource:

@@ -9,13 +9,16 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI
 
-from adsci.app.routes import auth, data, internal, models
+from adsci.agent.orchestrator import Orchestrator
+from adsci.agent.verifier import Verifier
+from adsci.app.routes import auth, chat, data, internal, models
 from adsci.app.sessions import SessionManager
 from adsci.auth.chatgpt import ChatGPTAuth
 from adsci.auth.grok import GrokAuth
 from adsci.auth.store import CredentialStore, load_store_key
 from adsci.config import Settings, get_settings
 from adsci.llm.registry import AdapterFactory, ModelRegistry
+from adsci.tools.base import default_registry
 
 REAP_INTERVAL_S = 300
 
@@ -45,6 +48,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.credentials = store
     app.state.adapters = AdapterFactory(store)
     app.state.models = ModelRegistry(store, lambda provider: app.state.adapters(provider))
+    app.state.orchestrator = Orchestrator(default_registry(), Verifier(settings), settings)
     app.state.chatgpt = ChatGPTAuth(store, settings)
     app.state.grok = GrokAuth(store, client_id=settings.xai_oauth_client_id)
     app.state.adapters.token_providers["chatgpt_plan"] = lambda cred: app.state.chatgpt.token
@@ -58,6 +62,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(internal.router)
     app.include_router(models.router)
     app.include_router(auth.router)
+    app.include_router(chat.router)
     return app
 
 
