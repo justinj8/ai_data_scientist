@@ -30,3 +30,8 @@ def live_ctx(live_app):
     s = app.state.sessions.create()
     s.files.add_file(SAMPLE / "orders.csv")
     yield ToolContext(session=s, settings=app.state.settings)
+
+
+@pytest.fixture
+def ctx_customers(ctx):
+    return ctx
