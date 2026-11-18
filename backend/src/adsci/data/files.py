@@ -115,12 +115,22 @@ def load_csv(path: Path) -> tuple[pd.DataFrame, list[str]]:
 
 
 def _find_header(rows: list[tuple]) -> int:
-    width = max((sum(v is not None for v in r) for r in rows), default=0)
+    """The header is the first "wide" row: title and note rows above it fill only a cell or two.
+    Header cells may be numbers (e.g. years), so only fill matters."""
+    width = max((sum(v is not None and str(v).strip() != "" for v in r) for r in rows), default=0)
     for i, row in enumerate(rows[:10]):
-        filled = [v for v in row if v is not None and str(v).strip() != ""]
-        if width and len(filled) >= 0.6 * width and all(isinstance(v, str) for v in filled):
+        filled = sum(v is not None and str(v).strip() != "" for v in row)
+        if width and filled >= 0.6 * width:
             return i
     return 0
+
+
+def _header_name(v, i: int) -> str:
+    if v is None or str(v).strip() == "":
+        return f"column_{i + 1}"
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
 
 
 def load_xlsx(path: Path, skipped: list[str] | None = None) -> dict[str, tuple[pd.DataFrame, list[str]]]:
@@ -141,7 +151,7 @@ def load_xlsx(path: Path, skipped: list[str] | None = None) -> dict[str, tuple[p
             header = list(rows[h])
             while header and header[-1] is None:
                 header.pop()
-            names = dedupe([str(v).strip() if v is not None else f"column_{i + 1}" for i, v in enumerate(header)])
+            names = dedupe([_header_name(v, i) for i, v in enumerate(header)])
             data = [list(r[: len(names)]) + [None] * (len(names) - len(r)) for r in rows[h + 1 :]]
             df = pd.DataFrame(data, columns=names)
             df, notes = _coerce_types(df)
