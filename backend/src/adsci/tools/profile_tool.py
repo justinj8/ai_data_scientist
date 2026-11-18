@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import plotly.express as px
 from pydantic import BaseModel, Field
 
@@ -34,7 +36,7 @@ class ProfileTool(Tool):
 
     async def run(self, args: ProfileInput, ctx: ToolContext) -> ToolOutput:
         df, warns = await ctx.load(args.data)
-        p = profile_frame(df, target=args.target)
+        p = await asyncio.to_thread(profile_frame, df, args.target)
         missing_total = float(df.isna().mean().mean() * 100) if len(df) else 0.0
         ui: list = [
             MetricsBlock(items=[

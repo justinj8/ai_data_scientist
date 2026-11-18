@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Literal
 
@@ -78,8 +79,8 @@ class CreateChartTool(Tool):
 
     async def run(self, args: CreateChartInput, ctx: ToolContext) -> ToolOutput:
         df, warns = await ctx.load(args.data)
-        fig, plotted = build_figure(df, args)
-        figure = figure_to_plain(fig)
+        fig, plotted = await asyncio.to_thread(build_figure, df, args)
+        figure = await asyncio.to_thread(figure_to_plain, fig)
         code = chart_code(args)
         ctx.notebook.add_python(code, [PlotlyOutput(figure=figure)])
         summary = f"Created {args.kind} chart '{args.title}' from {len(df)} rows. Plotted data:\n"

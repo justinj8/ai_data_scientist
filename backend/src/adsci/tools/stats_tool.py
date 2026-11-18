@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Literal
 
 import plotly.express as px
@@ -52,10 +53,10 @@ class StatsTestTool(Tool):
     async def run(self, args: StatsTestInput, ctx: ToolContext) -> ToolOutput:
         df, warns = await ctx.load(args.data)
         if args.kind == "compare_groups":
-            r = compare_groups(df, args.value, args.group)
+            r = await asyncio.to_thread(compare_groups, df, args.value, args.group)
             call = f"compare_groups(df, value={args.value!r}, group={args.group!r})"
         else:
-            r = association_test(df, args.x, args.y)
+            r = await asyncio.to_thread(association_test, df, args.x, args.y)
             call = f"association_test(df, x={args.x!r}, y={args.y!r})"
         ui: list = [MetricsBlock(items=[
             Metric(label="Test", value=r.test),

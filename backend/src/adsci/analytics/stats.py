@@ -20,6 +20,7 @@ from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.oneway import anova_oneway
 
 SHAPIRO_MAX_N = 5000
+MAX_GROUPS = 50
 SMALL_N = 20
 
 
@@ -112,6 +113,11 @@ def compare_groups(df: pd.DataFrame, value: str, group: str, alpha: float = 0.05
     groups = {str(k): v[value].astype(float).to_numpy() for k, v in data.groupby(group, sort=True)}
     if len(groups) < 2:
         raise ValueError(f"'{group}' needs at least two groups with data; found {len(groups)}.")
+    if len(groups) > MAX_GROUPS:
+        raise ValueError(
+            f"'{group}' has too many groups ({len(groups)}; the limit is {MAX_GROUPS}). It may be an identifier. "
+            "Compare a few groups, or the top N by size, by filtering in SQL."
+        )
     warns: list[str] = []
     small = [k for k, v in groups.items() if len(v) < SMALL_N]
     if small:

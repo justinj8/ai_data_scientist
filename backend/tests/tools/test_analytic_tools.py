@@ -60,3 +60,28 @@ async def test_segment_tool(ctx):
     out = await _run(ctx, "segment", {"data": CUSTOMERS, "features": ["tenure_months", "monthly_spend", "nps"]})
     assert out.data["k"] >= 2 and "silhouette" in out.summary.lower()
     assert "labels" not in out.data  # per-row labels are too big for grounding data
+
+
+async def test_cpu_heavy_tools_run_off_the_event_loop(ctx, monkeypatch):
+    import threading
+
+    import adsci.tools.chart_tool as chart_tool
+    import adsci.tools.profile_tool as profile_tool
+    import adsci.tools.stats_tool as stats_tool
+
+    seen = []
+    real_profile, real_compare, real_build = profile_tool.profile_frame, stats_tool.compare_groups, chart_tool.build_figure
+
+    def spy(fn):
+        def wrapper(*a, **k):
+            seen.append(threading.current_thread() is threading.main_thread())
+            return fn(*a, **k)
+        return wrapper
+
+    monkeypatch.setattr(profile_tool, "profile_frame", spy(real_profile))
+    monkeypatch.setattr(stats_tool, "compare_groups", spy(real_compare))
+    monkeypatch.setattr(chart_tool, "build_figure", spy(real_build))
+    await _run(ctx, "profile_dataset", {"data": CUSTOMERS})
+    await _run(ctx, "statistical_test", {"data": CUSTOMERS, "kind": "compare_groups", "value": "nps", "group": "plan"})
+    await _run(ctx, "create_chart", {"data": CUSTOMERS, "kind": "bar", "x": "plan", "y": "nps", "agg": "mean", "title": "t"})
+    assert seen == [False, False, False]
