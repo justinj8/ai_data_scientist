@@ -13,6 +13,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from adsci.agent.orchestrator import Orchestrator
 from adsci.agent.verifier import Verifier
+from adsci.app.boundary import SandboxBoundaryMiddleware
 from adsci.app.routes import auth, chat, data, insights, internal, models
 from adsci.app.sessions import SessionManager
 from adsci.auth.chatgpt import ChatGPTAuth
@@ -49,6 +50,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="AI Data Scientist", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+    if settings.kernel_user:
+        # Sandboxed kernels (Docker) must not reach the control API through localhost.
+        app.add_middleware(SandboxBoundaryMiddleware)
     app.state.sessions = sessions
     store = CredentialStore(settings.data_dir / "credentials.enc", load_store_key(settings))
     app.state.credentials = store
