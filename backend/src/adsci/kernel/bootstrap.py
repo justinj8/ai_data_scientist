@@ -93,10 +93,11 @@ import os as _os
 from adsci.kernel.bootstrap import make_sql_client as _msc, setup_display as _sd, show, SQLError
 sql = _msc(_os.environ["ADSCI_INTERNAL_URL"], _os.environ["ADSCI_SESSION_ID"], _os.environ["ADSCI_TOKEN"])
 _sd(int(_os.environ.get("ADSCI_PREVIEW_ROWS", "50")))
-import sys as _sys
-if _sys.platform.startswith("linux"):
+# Optional address-space cap. Off by default: numeric libraries reserve far more virtual memory than they use,
+# so a tight RLIMIT_AS breaks imports. Docker caps memory for the whole container instead.
+if _os.environ.get("ADSCI_KERNEL_MEMORY_BYTES"):
     import resource as _r
-    _limit = int(_os.environ.get("ADSCI_KERNEL_MEMORY_BYTES", str(2 * 1024 ** 3)))
+    _limit = int(_os.environ["ADSCI_KERNEL_MEMORY_BYTES"])
     try:
         _r.setrlimit(_r.RLIMIT_AS, (_limit, _limit))
     except (ValueError, OSError):

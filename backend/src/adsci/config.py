@@ -25,7 +25,10 @@ class Settings(BaseSettings):
     sample_dir: Path | None = None
     internal_base_url: str = "http://127.0.0.1:8000"
     xai_oauth_client_id: str | None = None  # only an ID xAI issued to you; enables SuperGrok sign-in
-    secret_key_file: Path | None = None  # set in Docker; otherwise the OS keychain holds the key
+    secret_key_file: Path | None = None
+    static_dir: Path | None = None  # built frontend (frontend/dist); served at / when set
+    host: str = "127.0.0.1"
+    port: int = 8000  # set in Docker; otherwise the OS keychain holds the key
 
 
 @lru_cache

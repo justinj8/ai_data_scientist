@@ -7,7 +7,8 @@ import contextlib
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 from adsci.agent.orchestrator import Orchestrator
 from adsci.agent.verifier import Verifier
@@ -64,10 +65,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth.router)
     app.include_router(chat.router)
     app.include_router(insights.router)
+    if settings.static_dir is not None and (settings.static_dir / "index.html").exists():
+        _mount_frontend(app, settings.static_dir)
     return app
+
+
+def _mount_frontend(app: FastAPI, dist) -> None:
+    """Serve the built single-page app; unknown non-API paths fall back to index.html."""
+    root = dist.resolve()
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str) -> FileResponse:
+        if path.startswith(("api/", "internal/")):
+            raise HTTPException(status_code=404)
+        target = (root / path).resolve()
+        if path and target.is_relative_to(root) and target.is_file():
+            return FileResponse(target)
+        return FileResponse(root / "index.html")
 
 
 def run() -> None:
     import uvicorn
 
-    uvicorn.run("adsci.app.main:create_app", factory=True, host="127.0.0.1", port=8000)
+    settings = get_settings()
+    uvicorn.run("adsci.app.main:create_app", factory=True, host=settings.host, port=settings.port)
