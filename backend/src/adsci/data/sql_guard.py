@@ -19,9 +19,32 @@ _FORBIDDEN_NODE_NAMES = [
     "Commit", "Rollback", "Analyze", "Kill", "Refresh", "Cache", "Uncache", "Describe",
 ]
 _FORBIDDEN_NODES = tuple(t for n in _FORBIDDEN_NODE_NAMES if (t := getattr(exp, n, None)) is not None)
-_FORBIDDEN_FUNC_EXACT = {"glob", "load_file", "pg_sleep", "sleep", "benchmark", "query_table", "query"}
-_FORBIDDEN_FUNC_PREFIX = ("read_", "pg_read", "pg_ls", "pg_stat_file", "lo_", "dblink", "xp_", "sp_")
+# Functions that read files, run SQL on other servers (whose SQL hides in a string), or have side effects
+# (killing sessions, changing settings, locks, notifications). Matched case-insensitively.
+_FORBIDDEN_FUNC_EXACT = {
+    "glob", "load_file", "pg_sleep", "sleep", "benchmark", "query_table", "query",
+    # federated / nested-SQL carriers
+    "openquery", "openrowset", "opendatasource", "external_query", "query_to_xml", "query_to_xmlschema",
+    "query_to_xml_and_xmlschema", "cursor_to_xml", "cursor_to_xmlschema",
+    # settings and session control
+    "set_config", "pg_notify", "pg_reload_conf", "pg_rotate_logfile", "pg_promote", "pg_switch_wal",
+    "pg_log_backend_memory_contexts",
+    # MySQL locks
+    "get_lock", "release_lock", "release_all_locks", "master_pos_wait", "source_pos_wait",
+}
+_FORBIDDEN_FUNC_PREFIX = (
+    "read_", "pg_read", "pg_ls", "pg_stat_file", "pg_file", "lo_", "dblink", "xp_", "sp_",
+    "pg_terminate", "pg_cancel", "pg_advisory", "pg_try_advisory", "pg_create_", "pg_drop_", "pg_replication",
+    "pg_logical", "pg_backup", "pg_start_backup", "pg_stop_backup", "pg_import_",
+    "system$",  # Snowflake system functions (abort sessions, cancel queries, ...)
+)
 _FORBIDDEN_FUNC_SUFFIX = ("_scan",)
+# A string literal that is itself a SQL statement, e.g. a UDF or linked server asked to run it.
+_EMBEDDED_STATEMENT = re.compile(
+    r"^\s*(insert|update|delete|merge|upsert|replace|drop|create|alter|truncate|grant|revoke|exec|execute|call"
+    r"|copy|attach|detach|set|use|begin|commit|rollback|kill)\b",
+    re.IGNORECASE,
+)
 # DuckDB treats a quoted table name like '/data/x.csv' as "read this file" (a replacement scan).
 _FILE_LIKE = re.compile(r"[/\\*?]|\.(csv|tsv|txt|json|jsonl|ndjson|parquet|xlsx?|gz|zst|db|duckdb|sqlite3?)$", re.I)
 _ALLOWED_ROOTS = tuple(t for n in ("Select", "Union", "Intersect", "Except", "SetOperation") if (t := getattr(exp, n, None)))
@@ -65,7 +88,15 @@ def guard_sql(sql: str, dialect: str, limit: int) -> str:
                 or name.startswith(_FORBIDDEN_FUNC_PREFIX)
                 or name.endswith(_FORBIDDEN_FUNC_SUFFIX)
             ):
-                raise UnsafeSQLError(f"The function {name}() is not allowed: queries may only read tables.")
+                raise UnsafeSQLError(
+                    f"The function {name}() is not allowed: queries may only read loaded tables, without side "
+                    "effects or access to other servers."
+                )
+            for arg in node.find_all(exp.Literal):
+                if arg.is_string and _EMBEDDED_STATEMENT.match(arg.this or ""):
+                    raise UnsafeSQLError(
+                        "A SQL statement inside a function argument is not allowed: this connection is read-only."
+                    )
 
     existing = root.args.get("limit")
     current: int | None = None

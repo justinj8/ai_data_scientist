@@ -75,6 +75,10 @@ flowchart LR
   kernel reaches data only through the backend's guarded `sql()` endpoint and gets an allowlisted environment.
   In Docker it also runs as a separate OS user that cannot read the app's data directory, where the encrypted
   credentials and their key live.
+- **Use a read-only database account.** The SQL guard also blocks functions that run SQL on other servers or
+  have side effects (`OPENQUERY`, `EXTERNAL_QUERY`, `query_to_xml`, `SYSTEM$…`, `pg_terminate_backend`, …), but
+  a parser can't know every vendor function. A read-only login is the real guarantee, especially on SQL Server,
+  which has no read-only session mode.
 
 ## Models and credentials
 

@@ -81,3 +81,46 @@ def test_quoted_identifiers_preserved():
 def test_file_path_tables_rejected(q):
     with pytest.raises(UnsafeSQLError, match="file"):
         guard_sql(q, "duckdb", 10)
+
+
+@pytest.mark.parametrize("dialect,q", [
+    ("tsql", "SELECT * FROM OPENQUERY(LinkedSrv, 'SELECT 1')"),
+    ("tsql", "SELECT * FROM OPENROWSET('SQLNCLI', 'Server=x;', 'SELECT 1')"),
+    ("tsql", "SELECT * FROM OPENDATASOURCE('SQLNCLI', 'Data Source=x').db.dbo.t"),
+    ("postgres", "SELECT query_to_xml('select 1', true, false, '')"),
+    ("postgres", "SELECT pg_terminate_backend(123)"),
+    ("postgres", "SELECT pg_cancel_backend(123)"),
+    ("postgres", "SELECT set_config('default_transaction_read_only','off',false)"),
+    ("postgres", "SELECT pg_notify('c','x')"),
+    ("postgres", "SELECT pg_advisory_lock(1)"),
+    ("postgres", "SELECT pg_reload_conf()"),
+    ("bigquery", "SELECT * FROM EXTERNAL_QUERY('conn', 'SELECT 1')"),
+    ("snowflake", "SELECT SYSTEM$ABORT_SESSION(1)"),
+    ("snowflake", "SELECT SYSTEM$CANCEL_QUERY('x')"),
+    ("mysql", "SELECT GET_LOCK('x', 10)"),
+])
+def test_federated_and_side_effect_functions_rejected(dialect, q):
+    with pytest.raises(UnsafeSQLError, match="not allowed"):
+        guard_sql(q, dialect, 10)
+
+
+@pytest.mark.parametrize("q", [
+    "SELECT some_udf('INSERT INTO t VALUES (1)')",
+    "SELECT f('  delete from t where 1=1')",
+    "SELECT f('UPDATE t SET a = 1')",
+    "SELECT f('drop table t')",
+    "SELECT f('EXEC sp_who')",
+])
+def test_sql_statements_hidden_in_string_arguments_rejected(q):
+    with pytest.raises(UnsafeSQLError, match="SQL statement"):
+        guard_sql(q, "postgres", 10)
+
+
+@pytest.mark.parametrize("q", [
+    "SELECT * FROM notes WHERE body LIKE '%update%'",
+    "SELECT * FROM t WHERE status = 'deleted'",
+    "SELECT pg_size_pretty(pg_total_relation_size('orders'))",
+    "SELECT pg_typeof(1)",
+])
+def test_ordinary_text_and_info_functions_still_allowed(q):
+    guard_sql(q, "postgres", 10)
