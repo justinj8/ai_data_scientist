@@ -4,6 +4,21 @@ import type { PlotlyFigure } from "../api/types";
 
 const COLORWAY = ["#0F7C86", "#4C51BF", "#C98A1B", "#C2416B", "#5B6B7F", "#2E7D4F", "#8B5CF6", "#D97706"];
 
+// Plotly Express hard-codes its default palette into each trace; map it onto ours.
+const PLOTLY_DEFAULTS = ["#636efa", "#ef553b", "#00cc96", "#ab63fa", "#ffa15a", "#19d3f3", "#ff6692", "#b6e880"];
+
+function recolor<T>(value: T): T {
+  if (typeof value === "string") {
+    const i = PLOTLY_DEFAULTS.indexOf(value.toLowerCase());
+    return (i === -1 ? value : COLORWAY[i % COLORWAY.length]) as T;
+  }
+  if (Array.isArray(value)) return value.map(recolor) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, recolor(v)])) as T;
+  }
+  return value;
+}
+
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
@@ -35,7 +50,7 @@ export function PlotlyChart({ figure, height = 320 }: { figure: PlotlyFigure; he
           ? { ...(figure.layout.title as object), font: { size: 13, color: cssVar("--ink") }, x: 0, xanchor: "left" }
           : undefined,
       };
-      void Plotly.react(el, figure.data as Plotly.Data[], layout as Partial<Plotly.Layout>, {
+      void Plotly.react(el, recolor(figure.data) as Plotly.Data[], layout as Partial<Plotly.Layout>, {
         responsive: true,
         displaylogo: false,
         modeBarButtonsToRemove: ["lasso2d", "select2d"],
