@@ -48,6 +48,6 @@ export function Dialog({
 export const inputClass =
   "w-full rounded-md border border-rule bg-surface px-2.5 py-1.5 text-sm placeholder:text-ink-3 focus:border-accent focus:outline-none";
 export const primaryButton =
-  "inline-flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50 dark:text-[#0b1a1d]";
+  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50 dark:text-[#0b1a1d]";
 export const secondaryButton =
-  "inline-flex items-center justify-center gap-1.5 rounded-md border border-rule bg-surface px-3 py-1.5 text-sm hover:bg-sunken disabled:opacity-50";
+  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-rule bg-surface px-3 py-1.5 text-sm hover:bg-sunken disabled:opacity-50";
