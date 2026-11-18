@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI
 
-from adsci.app.routes import data
+from adsci.app.routes import data, internal
 from adsci.app.sessions import SessionManager
 from adsci.config import Settings, get_settings
 
@@ -43,6 +43,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(data.router)
+    app.include_router(internal.router)
     return app
 
 
