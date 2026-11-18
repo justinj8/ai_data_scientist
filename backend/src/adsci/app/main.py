@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from adsci.agent.orchestrator import Orchestrator
 from adsci.agent.verifier import Verifier
-from adsci.app.routes import auth, chat, data, internal, models
+from adsci.app.routes import auth, chat, data, insights, internal, models
 from adsci.app.sessions import SessionManager
 from adsci.auth.chatgpt import ChatGPTAuth
 from adsci.auth.grok import GrokAuth
@@ -63,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(models.router)
     app.include_router(auth.router)
     app.include_router(chat.router)
+    app.include_router(insights.router)
     return app
 
 
