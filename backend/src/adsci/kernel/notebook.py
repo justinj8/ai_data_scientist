@@ -47,7 +47,7 @@ class NotebookRecorder:
         self.cells.append(new_code_cell(code, outputs=_nb_outputs(outputs)))
 
     def add_sql(self, query: str, source: str, outputs: list[Output]) -> None:
-        code = f'df = sql("""{query}""", source="{source}")\ndf'
+        code = f"df = sql({query!r}, source={source!r})\ndf"
         self.cells.append(new_code_cell(code, outputs=_nb_outputs(outputs)))
 
     def to_ipynb(self) -> str:
