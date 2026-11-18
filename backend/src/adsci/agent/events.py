@@ -66,6 +66,7 @@ class VerificationEvent(BaseModel):
     status: Literal["verified", "warnings"]
     ungrounded: list[str] = []
     issues: list[str] = []
+    notes: list[str] = []
 
 
 class UsageEvent(BaseModel):
