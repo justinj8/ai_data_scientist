@@ -33,3 +33,10 @@ async def test_stats_tool_missing_args_is_helpful_error(ctx):
     out = await default_registry().execute("statistical_test", {
         "data": CUSTOMERS, "kind": "compare_groups", "value": "monthly_spend"}, ctx)
     assert out.is_error and "group" in out.summary
+
+
+async def test_train_model_tool(ctx):
+    out = await _run(ctx, "train_model", {"data": CUSTOMERS, "target": "churned"})
+    assert out.data["task"] == "classification"
+    assert "baseline" in out.summary and "customer_id" in out.summary
+    assert any(b.type == "chart" for b in out.ui) and "train_and_evaluate(" in out.code
