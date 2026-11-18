@@ -1,0 +1,78 @@
+from adsci.data.files import FileDataSource, load_csv, load_xlsx
+
+from .conftest import SAMPLE
+
+
+def test_semicolon_latin1_thousands_mixed_dates(messy_dir):
+    df, warnings = load_csv(messy_dir / "messy_semicolon_latin1.csv")
+    assert list(df.columns) == ["Region", "Revenue", "Order Date"]
+    assert df["Region"].iloc[0] == "Zürich"
+    assert df["Revenue"].dtype.kind == "f"
+    assert df["Revenue"].iloc[0] == 1234.5
+    assert df["Revenue"].iloc[2] == 12000.25
+    assert str(df["Order Date"].dtype).startswith("datetime64")
+
+
+def test_utf8_bom(messy_dir):
+    df, _ = load_csv(messy_dir / "bom.csv")
+    assert list(df.columns) == ["id", "value"]
+
+
+def test_xlsx_title_rows_empty_sheet_dupes(messy_dir):
+    sheets = load_xlsx(messy_dir / "messy.xlsx")
+    assert set(sheets) == {"Data", "Notes"}  # empty "Scratch" skipped
+    df, _ = sheets["Notes"]
+    assert list(df.columns)[:2] == ["Item", "Item_2"]  # header found at row 3, dupes suffixed
+    assert len(df) == 2
+
+
+def test_file_source_xlsx_tables_and_warnings(tmp_path, messy_dir):
+    src = FileDataSource("files", tmp_path / "s.duckdb")
+    reports = src.add_file(messy_dir / "messy.xlsx")
+    assert {r.table for r in reports} == {"messy__data", "messy__notes"}
+    assert any("Scratch" in w for r in reports for w in r.warnings)
+    notes = next(t for t in src.schema() if t.name == "messy__notes")
+    assert [c.name for c in notes.columns][:2] == ["item", "item_2"]
+    assert notes.columns[0].original_name == "Item"
+
+
+def test_file_source_roundtrip_sample(tmp_path):
+    src = FileDataSource("files", tmp_path / "s.duckdb")
+    reports = src.add_file(SAMPLE / "retail_workbook.xlsx")
+    assert {r.table for r in reports} >= {
+        "retail_workbook__orders_2025",
+        "retail_workbook__targets",
+        "retail_workbook__notes",
+    }
+    df = src.query("select count(*) as n from retail_workbook__targets")
+    assert df["n"][0] > 0
+    t = next(t for t in src.schema() if t.name == "retail_workbook__targets")
+    assert all(c.original_name for c in t.columns)
+    assert t.row_count == df["n"][0]
+
+
+def test_csv_table_name_and_query_limit(tmp_path):
+    src = FileDataSource("files", tmp_path / "s.duckdb")
+    [report] = src.add_file(SAMPLE / "orders.csv")
+    assert report.table == "orders" and report.rows > 70000
+    assert len(src.query("select * from orders", limit=25)) == 25
+    assert src.dialect == "duckdb" and src.kind == "file"
+
+
+def test_reloading_same_file_replaces_table(tmp_path, messy_dir):
+    src = FileDataSource("files", tmp_path / "s.duckdb")
+    src.add_file(messy_dir / "bom.csv")
+    src.add_file(messy_dir / "bom.csv")
+    assert [t.name for t in src.schema()] == ["bom"]
+
+
+def test_file_source_query_is_guarded(tmp_path, messy_dir):
+    import pytest
+
+    from adsci.data.sql_guard import UnsafeSQLError
+
+    src = FileDataSource("files", tmp_path / "s.duckdb", row_limit=1)
+    src.add_file(messy_dir / "bom.csv")
+    with pytest.raises(UnsafeSQLError):
+        src.query("drop table bom")
+    assert len(src.query("select * from bom")) == 1  # default row limit applied
