@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     bigquery_max_bytes_billed: int = 1_000_000_000
     public_base_url: str = "http://127.0.0.1:8000"
     sample_dir: Path | None = None
+    internal_base_url: str = "http://127.0.0.1:8000"
 
 
 @lru_cache

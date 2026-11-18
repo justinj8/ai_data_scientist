@@ -1,0 +1,78 @@
+import httpx
+
+from adsci.kernel.manager import KernelSession
+
+
+async def test_state_persists(kernel):
+    await kernel.execute("x = 41", 10)
+    r = await kernel.execute("print(x + 1)", 10)
+    assert r.stdout.strip() == "42" and r.error is None
+
+
+async def test_error_returned(kernel):
+    r = await kernel.execute("1/0", 10)
+    assert r.error is not None and r.error.ename == "ZeroDivisionError"
+    assert "ZeroDivisionError" in r.error.traceback
+
+
+async def test_timeout_interrupts(kernel):
+    r = await kernel.execute("import time; time.sleep(30)", 2)
+    assert r.error is not None and "timed out" in r.error.evalue.lower()
+    assert (await kernel.execute("print(1)", 10)).stdout.strip() == "1"
+
+
+async def test_kernel_death_restarts(kernel):
+    r = await kernel.execute("import os; os._exit(1)", 10)
+    assert r.error is not None and r.restarted
+    after = await kernel.execute("print('alive'); print(type(pd).__name__)", 20)
+    assert after.stdout.split() == ["alive", "module"]  # bootstrap re-ran after restart
+
+
+async def test_plotly_and_table_capture(kernel):
+    r = await kernel.execute(
+        "import plotly.express as px\nshow(px.bar(x=[1, 2], y=[3, 4]))\npd.DataFrame({'a': [1, 2]})", 30
+    )
+    kinds = [o.type for o in r.outputs]
+    assert "plotly" in kinds and "table" in kinds
+    table = next(o for o in r.outputs if o.type == "table")
+    assert table.columns == ["a"] and table.rows == [[1], [2]] and table.total_rows == 2
+
+
+async def test_large_frame_preview_is_capped(kernel):
+    r = await kernel.execute("pd.DataFrame({'a': range(1000)})", 20)
+    table = next(o for o in r.outputs if o.type == "table")
+    assert len(table.rows) == 50 and table.total_rows == 1000
+
+
+async def test_stdout_is_capped(kernel):
+    r = await kernel.execute("print('x' * 500_000)", 20)
+    assert len(r.stdout) <= 200_100 and "truncated" in r.stdout
+
+
+async def test_sql_helper_roundtrip(live_app, tmp_path):
+    app, base = live_app
+    async with httpx.AsyncClient(base_url=base) as c:
+        sid = (await c.post("/api/sessions")).json()["session_id"]
+        assert (await c.post(f"/api/sessions/{sid}/samples/retail")).status_code == 200
+    session = app.state.sessions.get(sid)
+    k = KernelSession(sid, tmp_path / "k", internal_url=base, token=session.internal_token)
+    await k.start()
+    try:
+        r = await k.execute("df = sql('select * from orders limit 7')\nprint(len(df), list(df.columns)[:2])", 30)
+        assert r.error is None, r.error
+        assert r.stdout.strip() == "7 ['order_id', 'order_date']"
+        r2 = await k.execute("sql('select count(*) as n from customers', source='retail_sqlite')", 30)
+        assert r2.error is None and r2.outputs[0].rows == [[5000]]
+        bad = await k.execute("sql('drop table orders')", 30)
+        assert bad.error is not None and "read-only" in bad.error.evalue
+    finally:
+        await k.shutdown()
+
+
+async def test_internal_sql_rejects_bad_token(live_app):
+    app, base = live_app
+    async with httpx.AsyncClient(base_url=base) as c:
+        sid = (await c.post("/api/sessions")).json()["session_id"]
+        r = await c.post(f"/internal/sessions/{sid}/sql", json={"query": "select 1", "source": "files"},
+                         headers={"X-ADSCI-Token": "wrong"})
+    assert r.status_code == 403
