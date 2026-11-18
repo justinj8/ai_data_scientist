@@ -120,3 +120,21 @@ async def test_kernel_process_does_not_inherit_secret_env(tmp_path, monkeypatch)
         assert r.stdout.strip() == "None"
     finally:
         await k.shutdown()
+
+
+async def test_uninterruptible_code_restarts_the_kernel(kernel):
+    r = await kernel.execute("import signal, time\nsignal.signal(signal.SIGINT, signal.SIG_IGN)\ntime.sleep(60)", 2)
+    assert r.error is not None and r.restarted
+    assert (await kernel.execute("print('ok')", 20)).stdout.strip() == "ok"
+
+
+async def test_cancelled_step_interrupts_the_kernel(kernel):
+    import asyncio
+    import time
+
+    task = asyncio.create_task(kernel.execute("import time; time.sleep(60)", 120))
+    await asyncio.sleep(1.5)
+    task.cancel()
+    t0 = time.monotonic()
+    r = await kernel.execute("print('next')", 15)
+    assert r.stdout.strip() == "next" and time.monotonic() - t0 < 10

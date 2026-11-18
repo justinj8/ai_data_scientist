@@ -168,7 +168,21 @@ class KernelSession:
 
     async def execute(self, code: str, timeout_s: int) -> ExecutionResult:
         async with self._lock:
-            return await self._run(code, timeout_s)
+            try:
+                return await self._run(code, timeout_s)
+            except asyncio.CancelledError:
+                # The user pressed Stop or disconnected: don't leave the abandoned code running.
+                await asyncio.shield(self._interrupt_or_restart())
+                raise
+
+    async def _interrupt_or_restart(self) -> bool:
+        """Interrupt the running cell; restart the kernel if it doesn't go idle. Returns True if restarted."""
+        assert self._km is not None and self._kc is not None
+        await self._km.interrupt_kernel()
+        if await self._wait_idle(5):
+            return False
+        await self._restart()
+        return True
 
     async def _run(self, code: str, timeout_s: int) -> ExecutionResult:
         assert self._km is not None and self._kc is not None
@@ -179,11 +193,11 @@ class KernelSession:
         deadline = started + timeout_s
         while True:
             if time.monotonic() > deadline:
-                await self._km.interrupt_kernel()
-                await self._drain(msg_id, 5)
+                result.restarted = await self._interrupt_or_restart()
                 result.error = ExecError(
                     ename="TimeoutError",
-                    evalue=f"Execution timed out after {timeout_s}s and was interrupted.",
+                    evalue=f"Execution timed out after {timeout_s}s and was interrupted"
+                    + (" (the kernel was restarted; variables were lost)." if result.restarted else "."),
                     traceback="",
                 )
                 break
@@ -225,20 +239,18 @@ class KernelSession:
         result.duration_s = round(time.monotonic() - started, 3)
         return result
 
-    async def _drain(self, msg_id: str, seconds: float) -> None:
+    async def _wait_idle(self, seconds: float) -> bool:
+        """Wait until the kernel reports idle (any parent). False if it stays busy."""
         assert self._kc is not None
         end = time.monotonic() + seconds
         while time.monotonic() < end:
             try:
                 msg = await self._kc.get_iopub_msg(timeout=0.5)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - queue.Empty
                 continue
-            if (
-                msg.get("parent_header", {}).get("msg_id") == msg_id
-                and msg["msg_type"] == "status"
-                and msg["content"].get("execution_state") == "idle"
-            ):
-                return
+            if msg["msg_type"] == "status" and msg["content"].get("execution_state") == "idle":
+                return True
+        return False
 
     async def _restart(self) -> None:
         assert self._km is not None
