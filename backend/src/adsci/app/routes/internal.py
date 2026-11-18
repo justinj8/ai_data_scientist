@@ -27,7 +27,7 @@ def kernel_sql(request: Request, sid: str, body: SQLRequest, x_adsci_token: str 
     if not hmac.compare_digest(x_adsci_token.encode(), s.internal_token.encode()):
         raise HTTPException(status_code=403, detail="Invalid session token.")
     try:
-        df = s.get_source(body.source).query(body.query)
+        df = s.get_source(body.source).query(body.query, limit=s.settings.analysis_row_limit)
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e.args[0])) from None
     except UnsafeSQLError as e:

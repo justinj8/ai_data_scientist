@@ -98,3 +98,9 @@ def test_bigquery_without_credentials_fails_cleanly(settings, monkeypatch):
     monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
     with pytest.raises(ConnectionFailed, match="service-account"):
         SQLAlchemyDataSource("bq", ConnectionConfig(engine="bigquery", project="p", dataset="d"), settings)
+
+
+def test_query_limit_can_exceed_default_up_to_analysis_limit(retail_sqlite, settings):
+    settings.analysis_row_limit = 20_000
+    src = SQLAlchemyDataSource("shop", ConnectionConfig(engine="sqlite", database=str(retail_sqlite)), settings)
+    assert len(src.query("select * from orders", limit=1_000_000)) == 20_000

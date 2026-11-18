@@ -13,6 +13,7 @@ from jupyter_client.manager import AsyncKernelManager
 from pydantic import BaseModel, Field
 
 from adsci.kernel.bootstrap import KERNEL_STARTUP, PLOTLY_MIME, TABLE_MIME
+from adsci.kernel.plotly_json import figure_to_plain
 
 MAX_STDOUT = 200_000
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -59,7 +60,7 @@ class ExecutionResult(BaseModel):
 
 def _convert(data: dict) -> Output | None:
     if PLOTLY_MIME in data:
-        return PlotlyOutput(figure=data[PLOTLY_MIME])
+        return PlotlyOutput(figure=figure_to_plain(data[PLOTLY_MIME]))
     if TABLE_MIME in data:
         return TableOutput(**data[TABLE_MIME])
     if "image/png" in data:
@@ -196,6 +197,16 @@ class KernelSession:
     async def restart(self) -> None:
         async with self._lock:
             await self._restart()
+
+    def close_sync(self) -> None:
+        """Kill the kernel process without an event loop (used when a session is closed)."""
+        if self._kc is not None:
+            self._kc.stop_channels()
+        proc = getattr(getattr(self._km, "provisioner", None), "process", None)
+        if proc is not None and proc.poll() is None:
+            proc.kill()
+        if self._km is not None:
+            self._km.cleanup_resources()
 
     async def shutdown(self) -> None:
         if self._kc is not None:

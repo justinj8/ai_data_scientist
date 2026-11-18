@@ -76,3 +76,11 @@ def test_file_source_query_is_guarded(tmp_path, messy_dir):
     with pytest.raises(UnsafeSQLError):
         src.query("drop table bom")
     assert len(src.query("select * from bom")) == 1  # default row limit applied
+
+
+def test_query_limit_can_exceed_default_up_to_max(tmp_path):
+    src = FileDataSource("files", tmp_path / "s.duckdb", row_limit=10, max_limit=100)
+    src.add_file(SAMPLE / "customers.csv")
+    assert len(src.query("select * from customers")) == 10
+    assert len(src.query("select * from customers", limit=50)) == 50
+    assert len(src.query("select * from customers", limit=10_000)) == 100
