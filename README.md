@@ -70,9 +70,11 @@ flowchart LR
 - **Tools** (`backend/src/adsci/tools/`, `backend/src/adsci/analytics/`): each analysis is a plain, unit-tested
   Python function; the tool wrapper turns it into a compact summary for the model and rich tables and charts for
   the UI. The exported notebook calls the same functions, so it reproduces the agent's numbers exactly.
-- **Safety:** SQL is parsed with sqlglot and must be a single `SELECT` (row-limited, statement timeout,
-  read-only sessions where the database supports them). The Python kernel never sees database passwords or
-  provider keys: it reaches data only through the backend's guarded `sql()` endpoint.
+- **Safety:** SQL is parsed with sqlglot and must be a single `SELECT` on loaded tables (row-limited, statement
+  timeout, read-only sessions where the database supports them; DuckDB file access is disabled). The Python
+  kernel reaches data only through the backend's guarded `sql()` endpoint and gets an allowlisted environment.
+  In Docker it also runs as a separate OS user that cannot read the app's data directory, where the encrypted
+  credentials and their key live.
 
 ## Models and credentials
 
@@ -126,7 +128,9 @@ evals/        evaluation questions and results
 
 ## Limits
 
-- The Python kernel runs in the app container with a timeout and output caps; it is **not** a hardened sandbox.
+- The Python kernel has timeouts and output caps, and in Docker it runs as a separate user, but it is **not** a
+  hardened sandbox: it has network access. When you run natively (`uv run adsci`) it runs as your user and can
+  read anything you can, including the app's credential store, so prefer Docker for anything but development.
   For a public deployment, run each session's kernel in its own container or a service like E2B.
 - Built for a single local user: no accounts, and sessions live in memory.
 

@@ -134,12 +134,15 @@ class ToolContext:
 
         s = self.session
         if s.kernel is None:
+            root = self.settings.kernel_work_root
             k = KernelSession(
                 s.id,
-                s.dir / "work",
+                (root / s.id) if root else s.dir / "work",
                 internal_url=self.settings.internal_base_url,
                 token=s.internal_token,
                 preview_rows=self.settings.preview_rows,
+                run_as=self.settings.kernel_user,
+                group=self.settings.kernel_group,
             )
             await k.start()
             s.kernel = k

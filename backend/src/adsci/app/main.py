@@ -26,6 +26,9 @@ REAP_INTERVAL_S = 300
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    # Owner-only: holds the encrypted credential store, its key file and uploads.
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    settings.data_dir.chmod(0o700)
     sessions = SessionManager(settings)
 
     @contextlib.asynccontextmanager

@@ -28,7 +28,18 @@ ENV ADSCI_HOST=0.0.0.0 \
     ADSCI_SECRET_KEY_FILE=/app/data/secret.key \
     ADSCI_STATIC_DIR=/app/frontend/dist \
     ADSCI_SAMPLE_DIR=/app/sample_data/out
-RUN useradd --create-home --uid 1000 adsci && mkdir -p /app/data && chown -R adsci /app/data
+# The app runs as "adsci"; analysis kernels run as "kernel", which can't read /app/data (credentials, uploads).
+RUN apt-get update && apt-get install -y --no-install-recommends sudo && rm -rf /var/lib/apt/lists/* \
+ && groupadd adsci-kernel \
+ && useradd --create-home --uid 1000 --groups adsci-kernel adsci \
+ && useradd --create-home --uid 1001 --groups adsci-kernel kernel \
+ && mkdir -p /app/data /tmp/adsci-kernels && chown adsci /app/data && chmod 700 /app/data \
+ && chown adsci:adsci-kernel /tmp/adsci-kernels && chmod 2770 /tmp/adsci-kernels \
+ && printf '%s\n' \
+    'Defaults:adsci !requiretty, env_keep += "ADSCI_INTERNAL_URL ADSCI_SESSION_ID ADSCI_TOKEN ADSCI_PREVIEW_ROWS ADSCI_KERNEL_MEMORY_BYTES"' \
+    'adsci ALL=(kernel) NOPASSWD: /app/backend/.venv/bin/python -m ipykernel_launcher -f *' \
+    > /etc/sudoers.d/adsci-kernel && chmod 440 /etc/sudoers.d/adsci-kernel
+ENV ADSCI_KERNEL_USER=kernel ADSCI_KERNEL_GROUP=adsci-kernel ADSCI_KERNEL_WORK_ROOT=/tmp/adsci-kernels
 USER adsci
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"
