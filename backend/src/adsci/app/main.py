@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from adsci.agent.orchestrator import Orchestrator
 from adsci.agent.verifier import Verifier
@@ -47,6 +48,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="AI Data Scientist", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     app.state.sessions = sessions
     store = CredentialStore(settings.data_dir / "credentials.enc", load_store_key(settings))
     app.state.credentials = store
